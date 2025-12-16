@@ -30,35 +30,83 @@ def recommend_products(category: str, price_range: str = "any") -> List[Dict[str
             except (ValueError, IndexError):
                 pass
         
-        # Query products by category
+        # 1) Primary: exact category match
         if price_range == "any":
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT product_id, name, category, base_price
                 FROM products
                 WHERE category = ?
                 ORDER BY base_price ASC
                 LIMIT 10
-            """, (category,))
+                """,
+                (category,),
+            )
         else:
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT product_id, name, category, base_price
                 FROM products
                 WHERE category = ? AND base_price >= ? AND base_price <= ?
                 ORDER BY base_price ASC
                 LIMIT 10
-            """, (category, min_price, max_price))
-        
+                """,
+                (category, min_price, max_price),
+            )
+
         rows = cursor.fetchall()
-        
-        recommendations = []
+
+        # 2) Fallback: fuzzy match on category/name if no exact hits
+        if not rows:
+            like_term = f"%{category.lower()}%"
+            if price_range == "any":
+                cursor.execute(
+                    """
+                    SELECT product_id, name, category, base_price
+                    FROM products
+                    WHERE LOWER(category) LIKE ? OR LOWER(name) LIKE ?
+                    ORDER BY base_price ASC
+                    LIMIT 10
+                    """,
+                    (like_term, like_term),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT product_id, name, category, base_price
+                    FROM products
+                    WHERE (LOWER(category) LIKE ? OR LOWER(name) LIKE ?)
+                      AND base_price >= ? AND base_price <= ?
+                    ORDER BY base_price ASC
+                    LIMIT 10
+                    """,
+                    (like_term, like_term, min_price, max_price),
+                )
+            rows = cursor.fetchall()
+
+        # 3) Final fallback: popular items across all categories
+        if not rows:
+            cursor.execute(
+                """
+                SELECT product_id, name, category, base_price
+                FROM products
+                ORDER BY base_price ASC
+                LIMIT 10
+                """
+            )
+            rows = cursor.fetchall()
+
+        recommendations: List[Dict[str, Any]] = []
         for row in rows:
-            recommendations.append({
-                "product_id": row["product_id"],
-                "name": row["name"],
-                "category": row["category"],
-                "base_price": row["base_price"]
-            })
-        
+            recommendations.append(
+                {
+                    "product_id": row["product_id"],
+                    "name": row["name"],
+                    "category": row["category"],
+                    "base_price": row["base_price"],
+                }
+            )
+
         return recommendations
     finally:
         conn.close()

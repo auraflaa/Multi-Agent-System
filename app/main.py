@@ -276,6 +276,31 @@ async def add_user(user_data: AdminUserRequest):
         conn.close()
 
 
+@app.get("/admin/users/{user_id}")
+async def get_user(user_id: str):
+    """Fetch a user by ID (for existence checks)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT user_id, name, loyalty_tier FROM users WHERE user_id = ?",
+            (user_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+        return {
+            "status": "success",
+            "user": {
+                "user_id": row["user_id"],
+                "name": row["name"],
+                "loyalty_tier": row["loyalty_tier"],
+            },
+        }
+    finally:
+        conn.close()
+
+
 @app.delete("/admin/users/{user_id}")
 async def delete_user(user_id: str):
     """
