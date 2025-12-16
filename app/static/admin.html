@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Console - Multi-Agent Retail System</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f3f4f6;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            margin-bottom: 10px;
+        }
+        h2 {
+            margin-top: 30px;
+            margin-bottom: 10px;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        }
+        .row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .column {
+            flex: 1;
+            min-width: 300px;
+        }
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+        select, input, button {
+            padding: 8px 10px;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        input, select {
+            width: 100%;
+            box-sizing: border-box;
+        }
+        button {
+            cursor: pointer;
+            border-radius: 4px;
+            border: none;
+            background: #2563eb;
+            color: white;
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        pre {
+            background: #111827;
+            color: #e5e7eb;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            max-height: 300px;
+            overflow: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Admin Console - Multi-Agent Retail System</h1>
+        <p>Upload CSV data, inspect SQLite tables, and view user memory.</p>
+
+        <div class="row">
+            <div class="column">
+                <div class="card">
+                    <h2>Upload CSV to Database</h2>
+                    <label for="csvTable">Table</label>
+                    <select id="csvTable">
+                        <option value="users">users</option>
+                        <option value="products">products</option>
+                        <option value="inventory">inventory</option>
+                        <option value="orders">orders</option>
+                        <option value="categories">categories</option>
+                    </select>
+                    <label for="csvFile">CSV File</label>
+                    <input type="file" id="csvFile" accept=".csv" />
+                    <button id="uploadCsvBtn">Upload CSV</button>
+                    <pre id="csvResult"></pre>
+                </div>
+            </div>
+
+            <div class="column">
+                <div class="card">
+                    <h2>View Database Table</h2>
+                    <label for="dbTable">Table</label>
+                    <select id="dbTable">
+                        <option value="users">users</option>
+                        <option value="products">products</option>
+                        <option value="inventory">inventory</option>
+                        <option value="orders">orders</option>
+                        <option value="categories">categories</option>
+                    </select>
+                    <button id="loadTableBtn">Load Table</button>
+                    <div id="dbResult"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>View User Memory</h2>
+            <label for="memoryUserId">User ID</label>
+            <input type="text" id="memoryUserId" placeholder="e.g., 001 (same as in users table)" />
+            <button id="loadMemoryBtn">Load Memory</button>
+            <pre id="memoryResult"></pre>
+        </div>
+    </div>
+
+    <script>
+        const uploadCsvBtn = document.getElementById('uploadCsvBtn');
+        const csvTable = document.getElementById('csvTable');
+        const csvFile = document.getElementById('csvFile');
+        const csvResult = document.getElementById('csvResult');
+
+        const loadTableBtn = document.getElementById('loadTableBtn');
+        const dbTable = document.getElementById('dbTable');
+        const dbResult = document.getElementById('dbResult');
+
+        const loadMemoryBtn = document.getElementById('loadMemoryBtn');
+        const memoryUserId = document.getElementById('memoryUserId');
+        const memoryResult = document.getElementById('memoryResult');
+
+        // Insert CRUD forms below existing content
+        const container = document.querySelector('.container');
+        const crudSection = document.createElement('div');
+        crudSection.className = 'row';
+        crudSection.innerHTML = `
+        <div class="column">
+          <div class="card" id="userCrudCard"></div>
+        </div>
+        <div class="column">
+          <div class="card" id="productCrudCard"></div>
+        </div>
+        <div class="column">
+          <div class="card" id="inventoryCrudCard"></div>
+        </div>
+        <div class="column">
+          <div class="card" id="categoryCrudCard"></div>
+        </div>
+        `;
+        container.appendChild(crudSection);
+
+        const userFormHtml = `
+            <h2>Users</h2>
+            <label>User ID</label>
+            <input id="userIdInput" placeholder="001 (customer ID)">
+            <label>Name</label>
+            <input id="userNameInput" placeholder="Alice Johnson">
+            <label>Loyalty Tier</label>
+            <input id="userTierInput" placeholder="bronze / silver / gold / platinum">
+            <button id="userSaveBtn">Create / Update User</button>
+            <button id="userDeleteBtn" style="background:#dc2626;margin-left:8px;">Delete User</button>
+            <pre id="userCrudResult"></pre>
+        `;
+
+        const productFormHtml = `
+            <h2>Products</h2>
+            <label>Product ID</label>
+            <input id="productIdInput" placeholder="PROD-001 (must match inventory/product_id)">
+            <label>Name</label>
+            <input id="productNameInput" placeholder="Female Branded Top">
+            <label>Category</label>
+            <select id="productCategorySelect"></select>
+            <label>Base Price</label>
+            <input id="productPriceInput" placeholder="e.g., 149.99">
+            <button id="productSaveBtn">Create / Update Product</button>
+            <button id="productDeleteBtn" style="background:#dc2626;margin-left:8px;">Delete Product</button>
+            <pre id="productCrudResult"></pre>
+        `;
+
+        const inventoryFormHtml = `
+            <h2>Inventory</h2>
+            <label>SKU</label>
+            <input id="invSkuInput" placeholder="SKU-001 (stock keeping unit)">
+            <label>Product ID</label>
+            <input id="invProductIdInput" placeholder="PROD-001 (must exist in Products)">
+            <label>Size</label>
+            <input id="invSizeInput" placeholder="e.g., S / M / L">
+            <label>Quantity</label>
+            <input id="invQtyInput" placeholder="e.g., 50">
+            <label>Location</label>
+            <input id="invLocationInput" placeholder="e.g., warehouse / store-001">
+            <button id="invSaveBtn">Create / Update Inventory</button>
+            <button id="invDeleteBtn" style="background:#dc2626;margin-left:8px;">Delete Inventory</button>
+            <pre id="invCrudResult"></pre>
+        `;
+
+        const categoryFormHtml = `
+            <h2>Categories</h2>
+            <label>Category ID</label>
+            <input id="catIdInput" placeholder="fashion / electronics / footwear">
+            <label>Name</label>
+            <input id="catNameInput" placeholder="Human-readable name, e.g., Fashion">
+            <button id="catSaveBtn">Create / Update Category</button>
+            <button id="catDeleteBtn" style="background:#dc2626;margin-left:8px;">Delete Category</button>
+            <pre id="catCrudResult"></pre>
+        `;
+
+        document.getElementById('userCrudCard').innerHTML = userFormHtml;
+        document.getElementById('productCrudCard').innerHTML = productFormHtml;
+        document.getElementById('inventoryCrudCard').innerHTML = inventoryFormHtml;
+        document.getElementById('categoryCrudCard').innerHTML = categoryFormHtml;
+
+        const userIdInput = document.getElementById('userIdInput');
+        const userNameInput = document.getElementById('userNameInput');
+        const userTierInput = document.getElementById('userTierInput');
+        const userSaveBtn = document.getElementById('userSaveBtn');
+        const userDeleteBtn = document.getElementById('userDeleteBtn');
+        const userCrudResult = document.getElementById('userCrudResult');
+
+        const productIdInput = document.getElementById('productIdInput');
+        const productNameInput = document.getElementById('productNameInput');
+        const productCategorySelect = document.getElementById('productCategorySelect');
+        const productPriceInput = document.getElementById('productPriceInput');
+        const productSaveBtn = document.getElementById('productSaveBtn');
+        const productDeleteBtn = document.getElementById('productDeleteBtn');
+        const productCrudResult = document.getElementById('productCrudResult');
+
+        const invSkuInput = document.getElementById('invSkuInput');
+        const invProductIdInput = document.getElementById('invProductIdInput');
+        const invSizeInput = document.getElementById('invSizeInput');
+        const invQtyInput = document.getElementById('invQtyInput');
+        const invLocationInput = document.getElementById('invLocationInput');
+        const invSaveBtn = document.getElementById('invSaveBtn');
+        const invDeleteBtn = document.getElementById('invDeleteBtn');
+        const invCrudResult = document.getElementById('invCrudResult');
+
+        const catIdInput = document.getElementById('catIdInput');
+        const catNameInput = document.getElementById('catNameInput');
+        const catSaveBtn = document.getElementById('catSaveBtn');
+        const catDeleteBtn = document.getElementById('catDeleteBtn');
+        const catCrudResult = document.getElementById('catCrudResult');
+
+        uploadCsvBtn.addEventListener('click', async () => {
+            if (!csvFile.files[0]) {
+                csvResult.textContent = 'Please select a CSV file.';
+                return;
+            }
+            const table = csvTable.value;
+            const formData = new FormData();
+            formData.append('file', csvFile.files[0]);
+
+            uploadCsvBtn.disabled = true;
+            csvResult.textContent = 'Uploading...';
+
+            try {
+                const resp = await fetch(`/admin/upload-csv/${table}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await resp.json();
+                if (data.status === 'success') {
+                    const imported = data.rows_imported ?? 0;
+                    csvResult.textContent = `Imported ${imported} row(s) into '${data.table}'.`;
+                } else {
+                    csvResult.textContent = data.detail || 'Upload finished with an unexpected response.';
+                }
+            } catch (e) {
+                csvResult.textContent = `Error: ${e.message}`;
+            } finally {
+                uploadCsvBtn.disabled = false;
+            }
+        });
+
+        async function loadCategoriesIntoDropdown() {
+            try {
+                const resp = await fetch('/admin/db/categories');
+                const data = await resp.json();
+                if (data.status === 'success') {
+                    const rows = data.rows || [];
+                    productCategorySelect.innerHTML = '';
+                    rows.forEach(row => {
+                        const opt = document.createElement('option');
+                        opt.value = row.name; // we still store category text in products
+                        opt.textContent = `${row.category_id} - ${row.name}`;
+                        productCategorySelect.appendChild(opt);
+                    });
+                }
+            } catch (e) {
+                console.error('Error loading categories for dropdown', e);
+            }
+        }
+
+        // Load categories once on page load
+        loadCategoriesIntoDropdown();
+
+        function renderTable(tableName, rows) {
+            if (!rows || rows.length === 0) {
+                dbResult.innerHTML = `<p>No rows found in <strong>${tableName}</strong>.</p>`;
+                return;
+            }
+            const headers = Object.keys(rows[0]);
+            let html = `<h3>Table: ${tableName}</h3>`;
+            html += '<table border="1" cellpadding="4" cellspacing="0" style="border-collapse: collapse; width: 100%; font-size: 12px;">';
+            html += '<thead><tr>';
+            headers.forEach(h => {
+                html += `<th style="background:#f3f4f6;">${h}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+            rows.forEach(row => {
+                html += '<tr>';
+                headers.forEach(h => {
+                    let val = row[h];
+                    if (val === null || val === undefined) val = '';
+                    html += `<td>${String(val)}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            dbResult.innerHTML = html;
+        }
+
+        loadTableBtn.addEventListener('click', async () => {
+            const table = dbTable.value;
+            dbResult.innerHTML = 'Loading...';
+            try {
+                const resp = await fetch(`/admin/db/${table}`);
+                const data = await resp.json();
+                if (data.status === 'success') {
+                    renderTable(data.table, data.rows);
+                } else {
+                    dbResult.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                }
+            } catch (e) {
+                dbResult.innerHTML = `Error: ${e.message}`;
+            }
+        });
+
+        function renderMemorySummary(data) {
+            if (data.status !== 'success') {
+                memoryResult.textContent = data.detail || 'Unable to load memory.';
+                return;
+            }
+            const mem = data.memory || {};
+            const sessions = mem.sessions || {};
+            const sessionIds = Object.keys(sessions);
+            if (sessionIds.length === 0) {
+                memoryResult.textContent = 'No sessions found for this user yet.';
+                return;
+            }
+            let html = `<h3>User ${data.user_id} – ${sessionIds.length} session(s)</h3>`;
+            html += '<ul style="padding-left:16px;">';
+            sessionIds.forEach(id => {
+                const s = sessions[id] || {};
+                const step = s.step_0_result || {};
+                const lastMessage = s.last_message || '';
+                const lastIntent = s.last_intent || '';
+                html += '<li style="margin-bottom:8px;">';
+                html += `<strong>${id}</strong>: `;
+                if (step.available === true) {
+                    html += `in stock (qty ${step.quantity ?? '?'}, sku ${step.sku ?? ''}, size ${step.size ?? ''})`;
+                } else if (Object.keys(step).length > 0) {
+                    html += 'tools executed (see latest request below)';
+                } else {
+                    html += 'no tool results yet';
+                }
+                if (lastMessage) {
+                    html += `<br><span style="font-size:12px;color:#555;">Last message: "${lastMessage}"</span>`;
+                }
+                if (lastIntent) {
+                    html += `<br><span style="font-size:12px;color:#555;">Last intent: ${lastIntent}</span>`;
+                }
+                html += '</li>';
+            });
+            html += '</ul>';
+            memoryResult.innerHTML = html;
+        }
+
+        loadMemoryBtn.addEventListener('click', async () => {
+            const userId = memoryUserId.value.trim();
+            if (!userId) {
+                memoryResult.textContent = 'Please enter a user_id.';
+                return;
+            }
+            memoryResult.textContent = 'Loading...';
+            try {
+                const resp = await fetch(`/admin/memory/${userId}`);
+                const data = await resp.json();
+                renderMemorySummary(data);
+            } catch (e) {
+                memoryResult.textContent = `Error: ${e.message}`;
+            }
+        });
+
+        // Users CRUD
+        userSaveBtn.addEventListener('click', async () => {
+            const userId = userIdInput.value.trim();
+            if (!userId) {
+                userCrudResult.textContent = 'user_id is required';
+                return;
+            }
+            const body = {
+                user_id: userId,
+                name: userNameInput.value || 'Guest',
+                loyalty_tier: userTierInput.value || 'bronze'
+            };
+            userCrudResult.textContent = 'Saving...';
+            try {
+                const resp = await fetch('/admin/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await resp.json();
+                if (data.status === 'success') {
+                    userCrudResult.textContent = data.message || `User ${userId} saved.`;
+                } else {
+                    userCrudResult.textContent = data.detail || 'Unexpected response while saving user.';
+                }
+            } catch (e) {
+                userCrudResult.textContent = `Error: ${e.message}`;
+            }
+        });
+
+        userDeleteBtn.addEventListener('click', async () => {
+            const userId = userIdInput.value.trim();
+            if (!userId) {
+                userCrudResult.textContent = 'user_id is required';
+                return;
+            }
+            userCrudResult.textContent = 'Deleting...';
+            try {
+                const resp = await fetch(`/admin/users/${userId}`, {
+                    method: 'DELETE'
+                });
+                const data = await resp.json();
+                if (data.status === 'success') {
+                    userCrudResult.textContent = `User ${userId} deleted (DB: ${data.deleted_from_db ? 'yes' : 'no'}, memory: ${data.memory_cleared ? 'cleared' : 'none'})`;
+                } else {
+                    userCrudResult.textContent = data.detail || 'Unexpected response while deleting user.';
+                }
+            } catch (e) {
+                userCrudResult.textContent = `Error: ${e.message}`;
+            }
+        });
+
+        // Products CRUD
+        productSaveBtn.addEventListener('click', async () => {
+            const productId = productIdInput.value.trim();
+            if (!productId) {
+                productCrudResult.textContent = 'product_id is required';
+                return;
+            }
+            const body = {
+                product_id: productId,
+                name: productNameInput.value || 'Unnamed',
+                category: productCategorySelect.value || 'general',
+                base_price: parseFloat(productPriceInput.value || '0')
+            };
+            productCrudResult.textContent = 'Saving...';
+            try {
+                const resp = await fetch('/admin/products', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await resp.json();
+                if (data.status === 'success') {
+                    productCrudResult.textContent = data.message || `Product ${productId} saved.`;
+                } else {
+                    productCrudResult.textContent = data.detail || 'Unexpected response while saving product.';
+                }
+            } catch (e) {
+                productCrudResult.textContent = `Error: ${e.message}`;
+            }
+        });
+
+        productDeleteBtn.addEventListener('click', async () => {
+            const productId = productIdInput.value.trim();
+            if (!productId) {
+                productCrudResult.textContent = 'product_id is required';
+                return;
+            }
+            productCrudResult.textContent = 'Deleting...';
+            try {
+                const resp = await fetch(`/admin/products/${productId}`, {
+                    method: 'DELETE'
+                });
+                const data = await resp.json();
+                if (data.status === 'success') {
+                    productCrudResult.textContent = `Product ${productId} deleted.`;
+                } else {
+                    productCrudResult.textContent = data.detail || 'Unexpected response while deleting product.';
+                }
+            } catch (e) {
+                productCrudResult.textContent = `Error: ${e.message}`;
+            }
+        });
+
+        // Inventory CRUD
+        invSaveBtn.addEventListener('click', async () => {
+            const sku = invSkuInput.value.trim();
+            if (!sku) {
+                invCrudResult.textContent = 'sku is required';
+                return;
+            }
+            const body = {
+                sku,
+                product_id: invProductIdInput.value || '',
+                size: invSizeInput.value || '',
+                quantity: parseInt(invQtyInput.value || '0', 10),
+                location: invLocationInput.value || 'warehouse'
+            };
+            invCrudResult.textContent = 'Saving...';
+            try {
+                const resp = await fetch('/admin/inventory', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await resp.json();
+                if (data.status === 'success') {
+                    invCrudResult.textContent = data.message || `Inventory for ${sku}/${body.size} saved.`;
+                } else {
+                    invCrudResult.textContent = data.detail || 'Unexpected response while saving inventory.';
+                }
+            } catch (e) {
+                invCrudResult.textContent = `Error: ${e.message}`;
+            }
+        });
+
+        invDeleteBtn.addEventListener('click', async () => {
+            const sku = invSkuInput.value.trim();
+            const size = invSizeInput.value.trim();
+            if (!sku || !size) {
+                invCrudResult.textContent = 'sku and size are required';
+                return;
+            }
+            invCrudResult.textContent = 'Deleting...';
+            try {
+                const resp = await fetch(`/admin/inventory/${sku}/${size}`, {
+                    method: 'DELETE'
+                });
+                const data = await resp.json();
+                if (data.status === 'success') {
+                    invCrudResult.textContent = `Inventory ${sku}/${size} deleted.`;
+                } else {
+                    invCrudResult.textContent = data.detail || 'Unexpected response while deleting inventory.';
+                }
+            } catch (e) {
+                invCrudResult.textContent = `Error: ${e.message}`;
+            }
+        });
+
+        // Categories CRUD
+        catSaveBtn.addEventListener('click', async () => {
+            const categoryId = catIdInput.value.trim();
+            if (!categoryId) {
+                catCrudResult.textContent = 'category_id is required';
+                return;
+            }
+            const body = {
+                category_id: categoryId,
+                name: catNameInput.value || categoryId
+            };
+            catCrudResult.textContent = 'Saving...';
+            try {
+                const resp = await fetch('/admin/categories', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await resp.json();
+                if (data.status === 'success') {
+                    catCrudResult.textContent = data.message || `Category ${categoryId} saved.`;
+                } else {
+                    catCrudResult.textContent = data.detail || 'Unexpected response while saving category.';
+                }
+                // Refresh dropdown
+                loadCategoriesIntoDropdown();
+            } catch (e) {
+                catCrudResult.textContent = `Error: ${e.message}`;
+            }
+        });
+
+        catDeleteBtn.addEventListener('click', async () => {
+            const categoryId = catIdInput.value.trim();
+            if (!categoryId) {
+                catCrudResult.textContent = 'category_id is required';
+                return;
+            }
+            catCrudResult.textContent = 'Deleting...';
+            try {
+                const resp = await fetch(`/admin/categories/${categoryId}`, {
+                    method: 'DELETE'
+                });
+                const data = await resp.json();
+                if (data.status === 'success') {
+                    catCrudResult.textContent = `Category ${categoryId} deleted.`;
+                } else {
+                    catCrudResult.textContent = data.detail || 'Unexpected response while deleting category.';
+                }
+                loadCategoriesIntoDropdown();
+            } catch (e) {
+                catCrudResult.textContent = `Error: ${e.message}`;
+            }
+        });
+    </script>
+</body>
+</html>
+

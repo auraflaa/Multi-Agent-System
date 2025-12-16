@@ -1,0 +1,159 @@
+"""Session context management tool.
+
+New architecture:
+- One JSON file per user (`{user_id}.json`)
+- Inside each file, multiple sessions keyed by session_id
+This supports an omnichannel experience: memory is user-centric,
+with branches per session (channel).
+"""
+import json
+from pathlib import Path
+from typing import Dict, Any, Optional, List
+from app.config import MEMORY_DIR
+
+# Memory bounds to prevent unbounded growth
+MAX_MESSAGE_HISTORY = 10  # Keep last N messages per session
+MAX_TRACE_HISTORY = 5  # Keep last N execution traces per session
+
+
+def _get_user_file(user_id: str) -> Path:
+    """Return the path to the user's memory file."""
+    return MEMORY_DIR / f"{user_id}.json"
+
+
+def _load_user_memory(user_id: str) -> Dict[str, Any]:
+    """Load full memory for a user (all sessions)."""
+    user_file = _get_user_file(user_id)
+    if not user_file.exists():
+        return {"user_id": user_id, "sessions": {}}
+    try:
+        with open(user_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if not isinstance(data, dict):
+                return {"user_id": user_id, "sessions": {}}
+            data.setdefault("user_id", user_id)
+            data.setdefault("sessions", {})
+            return data
+    except (json.JSONDecodeError, IOError) as e:
+        print(f"Error reading user memory for {user_id}: {e}")
+        return {"user_id": user_id, "sessions": {}}
+
+
+def _save_user_memory(user_id: str, memory: Dict[str, Any]) -> None:
+    """Persist full memory for a user."""
+    user_file = _get_user_file(user_id)
+    try:
+        with open(user_file, "w", encoding="utf-8") as f:
+            json.dump(memory, f, indent=2, ensure_ascii=False)
+    except IOError as e:
+        print(f"Error saving user memory for {user_id}: {e}")
+        raise
+
+
+def get_session_context(user_id: str, session_id: str) -> Dict[str, Any]:
+    """
+    Retrieve session context for a given user and session.
+    
+    Args:
+        user_id: User identifier
+        session_id: Session identifier (channel/interaction)
+        
+    Returns:
+        Dictionary containing session context, empty dict if not found
+    """
+    memory = _load_user_memory(user_id)
+    sessions = memory.get("sessions", {})
+    return sessions.get(session_id, {})
+
+
+def save_session_context(user_id: str, session_id: str, context: Dict[str, Any]) -> None:
+    """
+    Save session context for a given user and session with bounded growth.
+    
+    Args:
+        user_id: User identifier
+        session_id: Session identifier
+        context: Dictionary containing session context to save
+    """
+    memory = _load_user_memory(user_id)
+    sessions = memory.setdefault("sessions", {})
+    
+    # Bound memory growth at the session level
+    bounded_context = _bound_context(context)
+    sessions[session_id] = bounded_context
+    memory["user_id"] = user_id
+    
+    _save_user_memory(user_id, memory)
+
+
+def get_user_memory(user_id: str) -> Dict[str, Any]:
+    """Return full memory for a user (all sessions)."""
+    return _load_user_memory(user_id)
+
+
+def clear_session(user_id: str, session_id: str) -> Dict[str, Any]:
+    """
+    Clear a specific session for a user.
+    
+    Returns a simple status dict.
+    """
+    memory = _load_user_memory(user_id)
+    sessions = memory.get("sessions", {})
+    if session_id in sessions:
+        sessions.pop(session_id, None)
+        _save_user_memory(user_id, memory)
+        return {"status": "cleared"}
+    return {"status": "not_found"}
+
+
+def clear_user_memory(user_id: str) -> Dict[str, Any]:
+    """
+    Delete the entire memory file for a user.
+    
+    Intended to be called when a user is deleted from the database
+    to keep DB and simple memory fully in sync (DB-first).
+    """
+    user_file = _get_user_file(user_id)
+    if user_file.exists():
+        try:
+            user_file.unlink()
+            return {"status": "cleared"}
+        except OSError as e:
+            print(f"Error deleting memory file for user {user_id}: {e}")
+            return {"status": "error", "error": str(e)}
+    return {"status": "not_found"}
+
+
+def _bound_context(context: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Bound context growth by capping history and traces.
+    
+    Args:
+        context: Original context dictionary
+        
+    Returns:
+        Bounded context dictionary
+    """
+    bounded = context.copy()
+    
+    # Cap message history
+    if "message_history" in bounded and isinstance(bounded["message_history"], list):
+        bounded["message_history"] = bounded["message_history"][-MAX_MESSAGE_HISTORY:]
+    
+    # Cap trace history
+    if "trace_history" in bounded and isinstance(bounded["trace_history"], list):
+        bounded["trace_history"] = bounded["trace_history"][-MAX_TRACE_HISTORY:]
+    
+    # Cap step results (keep only recent ones)
+    step_keys = [k for k in bounded.keys() if k.startswith("step_")]
+    if len(step_keys) > MAX_MESSAGE_HISTORY:
+        # Sort by step number and keep only recent
+        step_keys_sorted = sorted(
+            step_keys,
+            key=lambda x: int(x.split("_")[1]) if x.split("_")[1].isdigit() else 0,
+        )
+        for key in step_keys_sorted[:-MAX_MESSAGE_HISTORY]:
+            bounded.pop(key, None)
+    
+    return bounded
+
