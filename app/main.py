@@ -1,12 +1,15 @@
 """FastAPI main application with sales agent and admin endpoints."""
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi import UploadFile, File
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import json
 from pathlib import Path
+from app.middleware.auth import get_api_key, get_admin_api_key
+from app.middleware.rate_limit import check_rate_limit
+from app.config import ALLOWED_ORIGINS, API_KEY
 
 from app.db.database import init_database, get_db_connection
 from app.llm.planner import SalesAgentPlanner
@@ -23,9 +26,7 @@ from app.schemas.plan_schema import (
     AdminCategoryRequest,
 )
 from pydantic import BaseModel
-from typing import Dict, Any
 from app.tools import session, explainability, users
-from app.db.database import get_db_connection
 
 # Tag metadata for API docs
 tags_metadata = [
@@ -46,19 +47,36 @@ tags_metadata = [
 # Initialize FastAPI app
 app = FastAPI(
     title="Multi-Agent Retail System",
-    description="Enterprise-style agentic AI system for retail domain",
+    description="Multi-agent AI system for retail domain",
     version="1.0.0",
     openapi_tags=tags_metadata,
 )
 
-# CORS middleware
+# CORS middleware - restricted to allowed origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS if ALLOWED_ORIGINS else ["*"],  # Restrict in production
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
 )
+
+# Rate limiting middleware (applied to all requests)
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    """Apply rate limiting to all requests."""
+    # Skip rate limiting for static files and docs
+    if request.url.path.startswith(("/static", "/docs", "/redoc", "/openapi.json")):
+        return await call_next(request)
+    
+    try:
+        check_rate_limit(request)
+    except HTTPException:
+        raise
+    
+    response = await call_next(request)
+    return response
 
 # Mount static files for frontend
 static_dir = Path(__file__).parent / "static"
@@ -182,54 +200,112 @@ async def api_info():
     response_model=SalesAgentResponse,
     tags=["Sales Agent"],
     summary="POST /sales-agent - Main Orchestration Endpoint",
-    description="""<h3>Endpoint URL</h3>
-    <p><code>POST http://127.0.0.1:8000/sales-agent</code> (or your server URL)</p>
-    
-    <h3>Core sales agent endpoint</h3>
-    <p>Orchestrates the multi-agent system.</p>
-    
-    <h3>Flow</h3>
-    <ol>
-        <li><strong>Planner</strong> - Generates JSON action plan from user message</li>
-        <li><strong>Validator</strong> - Validates plan structure and parameters</li>
-        <li><strong>Executor</strong> - Executes tools sequentially (inventory, recommendations, loyalty, payment, etc.)</li>
-        <li><strong>Responder</strong> - Generates natural language response</li>
-    </ol>
-    
-    <h3>Features</h3>
-    <ul>
-        <li>Session-based conversation management</li>
-        <li>User personalization integration</li>
-        <li>Gender-specific product filtering</li>
-        <li>Execution trace for explainability</li>
-    </ul>
-    
-    <h3>cURL Example</h3>
-    <pre><code>curl -X POST 'http://127.0.0.1:8000/sales-agent' \\
+    description="""**API Endpoint:** `POST /sales-agent`
+
+**Core sales agent endpoint** - Orchestrates the multi-agent system.
+
+**Flow:**
+1. **Planner** - Generates JSON action plan from user message
+2. **Validator** - Validates plan structure and parameters
+3. **Executor** - Executes tools sequentially (inventory, recommendations, loyalty, payment, etc.)
+4. **Responder** - Generates natural language response
+
+**Features:**
+- Session-based conversation management
+- User personalization integration
+- Gender-specific product filtering
+- Execution trace for explainability
+
+**cURL Example:**
+```bash
+curl -X POST 'http://127.0.0.1:8000/sales-agent' \\
   -H 'accept: application/json' \\
   -H 'Content-Type: application/json' \\
+  -H 'X-API-Key: your_api_key_here' \\
   -d '{
     "session_id": "session_1",
     "user_id": "001",
     "message": "Find me fashion products"
-  }'</code></pre>
-    
-    <h3>Example Request</h3>
-    <pre><code>{
+  }'
+```
+
+**Python Example:**
+```python
+import requests
+
+url = "http://127.0.0.1:8000/sales-agent"
+headers = {
+    "accept": "application/json",
+    "Content-Type": "application/json",
+    "X-API-Key": "your_api_key_here"
+}
+data = {
     "session_id": "session_1",
     "user_id": "001",
     "message": "Find me men's fashion products"
-}</code></pre>
-    
-    <h3>Example Response</h3>
-    <pre><code>{
-    "response": "Here are some fashion products I found for you...",
-    "execution_trace": {
-        "validation_passed": true,
-        "execution_steps": [...]
+}
+
+response = requests.post(url, json=data, headers=headers)
+result = response.json()
+```
+
+**JavaScript Example:**
+```javascript
+const response = await fetch('http://127.0.0.1:8000/sales-agent', {
+  method: 'POST',
+  headers: {
+    'accept': 'application/json',
+    'Content-Type': 'application/json',
+    'X-API-Key': 'your_api_key_here'
+  },
+  body: JSON.stringify({
+    session_id: "session_1",
+    user_id: "001",
+    message: "Find me women's fashion products"
+  })
+});
+
+const result = await response.json();
+console.log(result.response);
+```
+
+**Example Request:**
+```json
+{
+  "session_id": "session_1",
+  "user_id": "001",
+  "message": "Find me men's fashion products"
+}
+```
+
+**Example Response:**
+```json
+{
+  "response": "Here are some fashion products I found for you...",
+  "execution_trace": {
+    "validation_passed": true,
+    "execution_steps": [
+      {
+        "step": "recommend_products",
+        "success": true,
+        "result": [...]
+      }
+    ],
+    "plan": {
+      "intent": "product_recommendation",
+      "steps": [...],
+      "needs_tools": true
     },
-    "session_id": "session_1"
-}</code></pre>
+    "workflow_flow": [
+      {"icon": "🛍️", "label": "Sales Agent", "class": "agent"},
+      {"icon": "🎯", "label": "Recommendation Agent", "class": "agent"},
+      {"icon": "🗄️", "label": "DB", "class": "tool"},
+      {"icon": "🛠️", "label": "Tool", "class": "tool"}
+    ]
+  },
+  "session_id": "session_1"
+}
+```
     """,
     response_description="Returns conversational response with full execution trace",
     operation_id="sales_agent_post",
@@ -262,34 +338,25 @@ async def sales_agent(request: SalesAgentRequest) -> SalesAgentResponse:
         # Enforce DB-first sync: user must exist in SQLite
         require_user_in_db(request.user_id)
 
-        # Get session context (user-centric, branched by session)
+        # Get session context with personalization and user profile
         session_context = session.get_session_context(request.user_id, request.session_id)
-
-        # Load long-lived personalization side-car and surface in context
+        
+        # Load personalization data
         try:
             personalization = session.get_personalization(request.user_id)
             if personalization:
-                # Attach full personalization blob for the planner
-                session_context.setdefault("personalization", personalization)
-                # Optionally surface common fields at top level for easier prompting
-                if "gender" in personalization and "gender" not in session_context:
-                    session_context["gender"] = personalization["gender"]
-                if "preferred_size" in personalization and "preferred_size" not in session_context:
-                    session_context["preferred_size"] = personalization["preferred_size"]
-        except Exception as e:
-            print(f"Warning: could not enrich session context with personalization for {request.user_id}: {e}")
-
-        # Enrich session context with stable user profile for better planning
+                session_context["personalization"] = personalization
+        except Exception:
+            pass
+        
+        # Load user profile
         try:
             profile = users.get_user_profile(request.user_id)
-            # Store full profile and expose loyalty_tier at top level
-            session_context.setdefault("user_profile", profile)
-            if profile.get("loyalty_tier"):
-                session_context.setdefault("loyalty_tier", profile["loyalty_tier"])
-        except Exception as e:
-            print(f"Warning: could not enrich session context with user profile for {request.user_id}: {e}")
+            session_context["user_profile"] = profile
+        except Exception:
+            pass
         
-        # Step 1: Planner generates plan
+        # Step 1: Planner generates plan (LLM chooses tools)
         plan_dict, original_llm_response = planner.generate_plan(
             user_message=request.message,
             session_id=request.session_id,
@@ -297,11 +364,9 @@ async def sales_agent(request: SalesAgentRequest) -> SalesAgentResponse:
             session_context=session_context
         )
         
-        execution_trace.plan = None  # Will be set after validation
-        
-        # Step 2: Validate plan
+        # Step 2: Validate plan (basic validation only)
         is_valid, validated_plan, errors, was_fixed = validator.validate(
-            plan_dict, original_llm_response
+            plan_dict, original_llm_response, request.message
         )
         
         execution_trace.plan = validated_plan
@@ -309,36 +374,49 @@ async def sales_agent(request: SalesAgentRequest) -> SalesAgentResponse:
         execution_trace.validation_errors = errors
         execution_trace.governance_used = was_fixed
         
-        if was_fixed:
-            # Determine governance reason from errors
-            if any("json" in e.lower() or "parse" in e.lower() for e in errors):
-                reason = "Invalid JSON format - governance repaired formatting"
-            elif any("schema" in e.lower() or "field" in e.lower() for e in errors):
-                reason = "Schema violation - governance fixed structure"
-            elif any("action" in e.lower() or "tool" in e.lower() for e in errors):
-                reason = "Invalid action - governance corrected tool name"
-            else:
-                reason = "Validation error - governance fixed plan"
-            execution_trace.governance_fixes = [reason]
-        
         if not is_valid:
-            # Return error response
             return SalesAgentResponse(
                 response=f"I encountered an error planning your request: {', '.join(errors)}",
                 execution_trace=execution_trace,
-                session_id=request.session_id,  # Echo back session_id even on validation failure
+                session_id=request.session_id,
             )
         
-        # Step 3: Execute plan
-        execution_result = runner.execute(
-            plan=validated_plan,
-            session_id=request.session_id,
-            user_id=request.user_id,
-            user_message=request.message
-        )
+        # Step 3: Execute plan (always execute if there are steps)
+        if validated_plan.steps and len(validated_plan.steps) > 0:
+            execution_result = runner.execute(
+                plan=validated_plan,
+                session_id=request.session_id,
+                user_id=request.user_id,
+                user_message=request.message,
+                session_context=session_context
+            )
+        else:
+            # No steps - generate response directly
+            from app.llm.responder import ResponseGenerator
+            responder = ResponseGenerator()
+            execution_result = {
+                "response": responder.generate(
+                    user_message=request.message,
+                    plan=validated_plan,
+                    execution_steps=[],
+                    context=session_context
+                ),
+                "execution_steps": [],
+                "final_result": None
+            }
         
         execution_trace.execution_steps = execution_result.get("execution_steps", [])
         execution_trace.final_result = execution_result.get("final_result")
+        
+        # Generate workflow flow using LLM (automated flow visualization)
+        try:
+            execution_trace.workflow_flow = explainability.generate_workflow_flow(
+                execution_trace.execution_steps,
+                execution_trace.validation_passed
+            )
+        except Exception as e:
+            print(f"Warning: Could not generate workflow flow: {e}")
+            execution_trace.workflow_flow = None
         
         # Log execution trace for explainability
         try:
@@ -346,9 +424,10 @@ async def sales_agent(request: SalesAgentRequest) -> SalesAgentResponse:
                 "session_id": request.session_id,
                 "user_id": request.user_id,
                 "message": request.message,
-                "plan": validated_plan.dict(),
+                "plan": validated_plan.model_dump() if hasattr(validated_plan, 'model_dump') else validated_plan.dict(),
                 "execution_steps": execution_trace.execution_steps,
-                "validation_errors": errors
+                "validation_errors": errors,
+                "workflow_flow": execution_trace.workflow_flow
             })
         except Exception as e:
             print(f"Warning: Could not log execution trace: {e}")
@@ -373,6 +452,10 @@ async def sales_agent(request: SalesAgentRequest) -> SalesAgentResponse:
         )
     except Exception as e:
         # Generic catch-all: keep raw error only in the trace, not in the user message
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error in sales_agent endpoint: {str(e)}")
+        print(f"Traceback: {error_details}")
         execution_trace.validation_errors.append(f"Unexpected error: {str(e)}")
         return SalesAgentResponse(
             response=(
@@ -386,7 +469,7 @@ async def sales_agent(request: SalesAgentRequest) -> SalesAgentResponse:
 
 # ==================== ADMIN ENDPOINTS (JSON / FORM) ====================
 
-@app.post("/admin/users")
+@app.post("/admin/users", dependencies=[Depends(get_admin_api_key)] if API_KEY else [])
 async def add_user(user_data: AdminUserRequest):
     """Add a new user to the database."""
     conn = get_db_connection()
@@ -417,7 +500,7 @@ async def add_user(user_data: AdminUserRequest):
         conn.close()
 
 
-@app.get("/admin/users/{user_id}")
+@app.get("/admin/users/{user_id}", dependencies=[Depends(get_admin_api_key)] if API_KEY else [])
 async def get_user(user_id: str):
     """Fetch a user by ID (for existence checks)."""
     conn = get_db_connection()
@@ -442,7 +525,7 @@ async def get_user(user_id: str):
         conn.close()
 
 
-@app.delete("/admin/users/{user_id}")
+@app.delete("/admin/users/{user_id}", dependencies=[Depends(get_admin_api_key)] if API_KEY else [])
 async def delete_user(user_id: str):
     """
     Delete a user from the database and clear their simple memory.
@@ -476,7 +559,7 @@ async def delete_user(user_id: str):
     }
 
 
-@app.post("/admin/products")
+@app.post("/admin/products", dependencies=[Depends(get_admin_api_key)] if API_KEY else [])
 async def add_product(product_data: AdminProductRequest):
     """Add a new product to the database."""
     conn = get_db_connection()
@@ -528,7 +611,7 @@ async def add_product(product_data: AdminProductRequest):
         conn.close()
 
 
-@app.delete("/admin/products/{product_id}")
+@app.delete("/admin/products/{product_id}", dependencies=[Depends(get_admin_api_key)] if API_KEY else [])
 async def delete_product(product_id: str):
     """Delete a product from the database."""
     conn = get_db_connection()
@@ -549,7 +632,7 @@ async def delete_product(product_id: str):
         conn.close()
 
 
-@app.post("/admin/inventory")
+@app.post("/admin/inventory", dependencies=[Depends(get_admin_api_key)] if API_KEY else [])
 async def add_inventory(inventory_data: AdminInventoryRequest):
     """Add inventory entry to the database."""
     conn = get_db_connection()
@@ -593,7 +676,7 @@ async def add_inventory(inventory_data: AdminInventoryRequest):
         conn.close()
 
 
-@app.post("/admin/categories")
+@app.post("/admin/categories", dependencies=[Depends(get_admin_api_key)] if API_KEY else [])
 async def add_category(category: AdminCategoryRequest):
     """Add or update a product category."""
     conn = get_db_connection()
@@ -619,7 +702,7 @@ async def add_category(category: AdminCategoryRequest):
         conn.close()
 
 
-@app.delete("/admin/categories/{category_id}")
+@app.delete("/admin/categories/{category_id}", dependencies=[Depends(get_admin_api_key)] if API_KEY else [])
 async def delete_category(category_id: str):
     """Delete a category from the database."""
     conn = get_db_connection()
@@ -640,7 +723,7 @@ async def delete_category(category_id: str):
         conn.close()
 
 
-@app.delete("/admin/inventory/{sku}/{size}")
+@app.delete("/admin/inventory/{sku}/{size}", dependencies=[Depends(get_admin_api_key)] if API_KEY else [])
 async def delete_inventory(sku: str, size: str):
     """Delete an inventory entry for a given sku+size."""
     conn = get_db_connection()
@@ -665,7 +748,7 @@ async def delete_inventory(sku: str, size: str):
         conn.close()
 
 
-@app.post("/admin/orders")
+@app.post("/admin/orders", dependencies=[Depends(get_admin_api_key)] if API_KEY else [])
 async def add_order(order_data: AdminOrderRequest):
     """Add an order to the database."""
     conn = get_db_connection()
@@ -705,7 +788,7 @@ async def add_order(order_data: AdminOrderRequest):
 ALLOWED_TABLES = {"users", "products", "inventory", "orders", "categories", "loyalty_tiers"}
 
 
-@app.post("/admin/upload-csv/{table}")
+@app.post("/admin/upload-csv/{table}", dependencies=[Depends(get_admin_api_key)] if API_KEY else [])
 async def upload_csv(table: str, file: UploadFile = File(...)):
     """
     Upload CSV data for a given table (users, products, inventory, orders).
@@ -830,7 +913,7 @@ async def upload_csv(table: str, file: UploadFile = File(...)):
         conn.close()
 
 
-@app.get("/admin/db/{table}")
+@app.get("/admin/db/{table}", dependencies=[Depends(get_admin_api_key)] if API_KEY else [])
 async def get_table_data(table: str):
     """Return all rows from a given table (for demo/inspection)."""
     table = table.lower()
@@ -853,7 +936,7 @@ async def get_table_data(table: str):
         conn.close()
 
 
-@app.get("/admin/memory/{user_id}")
+@app.get("/admin/memory/{user_id}", dependencies=[Depends(get_admin_api_key)] if API_KEY else [])
 async def get_user_memory(user_id: str):
     """Return all sessions and memory for a given user."""
     try:
@@ -884,7 +967,7 @@ class SessionContextRequest(BaseModel):
     context: Dict[str, Any]
 
 
-@app.post("/admin/session")
+@app.post("/admin/session", dependencies=[Depends(get_admin_api_key)] if API_KEY else [])
 async def update_session_context(request: SessionContextRequest):
     """Add or update session context."""
     try:
@@ -898,7 +981,7 @@ async def update_session_context(request: SessionContextRequest):
         raise HTTPException(status_code=400, detail=f"Error updating session context: {str(e)}")
 
 
-@app.delete("/admin/session/{user_id}/{session_id}")
+@app.delete("/admin/session/{user_id}/{session_id}", dependencies=[Depends(get_admin_api_key)] if API_KEY else [])
 async def clear_session(user_id: str, session_id: str):
     """Clear session context."""
     try:
@@ -917,7 +1000,7 @@ async def clear_session(user_id: str, session_id: str):
         raise HTTPException(status_code=400, detail=f"Error clearing session: {str(e)}")
 
 
-@app.get("/admin/session/{user_id}/{session_id}")
+@app.get("/admin/session/{user_id}/{session_id}", dependencies=[Depends(get_admin_api_key)] if API_KEY else [])
 async def get_session_context_endpoint(user_id: str, session_id: str):
     """Get session context for a specific user/session."""
     try:

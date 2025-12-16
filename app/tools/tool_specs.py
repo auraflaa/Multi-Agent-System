@@ -9,8 +9,8 @@ TOOL_PARAM_REQUIREMENTS: Dict[str, Set[str]] = {
     "get_user_profile": {"user_id"},
     "update_user_name": {"user_id", "name"},
     "update_personalization": {"user_id", "insights"},  # insights is a dict of personalization data
-    # Size is optional; planner may only know SKU. Tool will handle both cases.
-    "check_inventory": {"sku"},
+    # Size is optional. Can use either sku OR product_id to check inventory.
+    "check_inventory": set(),  # At least one of: sku or product_id required
     "recommend_products": {"category"},  # price_range and gender are optional
     "apply_offers": {"cart", "loyalty_tier"},
     "calculate_payment": {"cart", "discounts"},

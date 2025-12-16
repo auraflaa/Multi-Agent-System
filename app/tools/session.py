@@ -178,7 +178,7 @@ def update_personalization(user_id: str, insights: Dict[str, Any]) -> Dict[str, 
         user_id: User identifier
         insights: Dictionary of personalization insights to update. Common keys:
             - gender: "male" | "female" | "other"
-            - preferred_size: "XS" | "S" | "M" | "L" | "XL" | "XXL"
+            - preferred_size: "XS" | "S" | "M" | "L" | "XL" | "XXL" (or full forms like "Medium", "Small")
             - style_preferences: List[str] (e.g., ["casual", "sporty"])
             - orders_being_processed: List[Dict] (order tracking)
             - any other unstructured user attributes
@@ -188,6 +188,11 @@ def update_personalization(user_id: str, insights: Dict[str, Any]) -> Dict[str, 
     """
     if not insights:
         return _load_user_personalization(user_id)
+    
+    # Normalize size if provided (accept both "M" and "Medium", store as "M")
+    if "preferred_size" in insights and insights["preferred_size"]:
+        from app.utils.size_mapping import normalize_size
+        insights["preferred_size"] = normalize_size(insights["preferred_size"])
     
     return save_personalization(user_id, insights)
 

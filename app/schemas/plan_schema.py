@@ -14,6 +14,10 @@ class AgentPlan(BaseModel):
     intent: str = Field(..., description="User intent summary")
     steps: List[PlanStep] = Field(..., description="Sequential execution steps")
     response_style: str = Field(..., description="Style for final response")
+    needs_tools: bool = Field(
+        default=True, 
+        description="Whether this query requires tool execution. Set to false if the query can be answered directly with a single LLM response (e.g., greetings, general questions, explanations)."
+    )
 
 
 class SalesAgentRequest(BaseModel):
@@ -44,6 +48,10 @@ class ExecutionTrace(BaseModel):
     final_result: Optional[Dict[str, Any]] = None
     governance_fixes: Optional[List[str]] = None
     governance_used: bool = Field(default=False, description="Whether governance agent was activated")
+    workflow_flow: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        description="LLM-generated workflow visualization showing the sequence of agents and tools used"
+    )
 
 
 class SalesAgentResponse(BaseModel):

@@ -490,6 +490,48 @@
             position: relative;
         }
 
+        /* AI Disclaimer */
+        .ai-disclaimer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.95);
+            -webkit-backdrop-filter: blur(8px);
+            backdrop-filter: blur(8px);
+            border-top: 1px solid var(--border-light);
+            padding: 12px 24px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-muted);
+            z-index: 100;
+            box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Adjust input area padding to account for disclaimer */
+        .input-area {
+            padding-bottom: calc(24px + 48px); /* Extra padding for disclaimer */
+        }
+
+        .ai-disclaimer-text {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .ai-disclaimer-icon {
+            font-size: 14px;
+            opacity: 0.7;
+        }
+
+        @media (max-width: 768px) {
+            .ai-disclaimer {
+                padding: 10px 16px;
+                font-size: 11px;
+            }
+        }
+
         .input-wrapper {
             display: flex;
             gap: 12px;
@@ -776,6 +818,14 @@
                                 />
                             </svg>
                         </button>
+                    </div>
+                </div>
+
+                <!-- AI Disclaimer -->
+                <div class="ai-disclaimer">
+                    <div class="ai-disclaimer-text">
+                        <span class="ai-disclaimer-icon">⚠️</span>
+                        <span>This AI assistant is prone to mistakes. Please verify important information independently.</span>
                     </div>
                 </div>
                 
@@ -1087,7 +1137,11 @@
         async function syncSessionsWithServer(userId) {
             if (!userId) return;
             try {
-                const resp = await fetch(`/admin/memory/${encodeURIComponent(userId)}`);
+                const apiKey = localStorage.getItem('api_key') || '';
+                const headers = {};
+                if (apiKey) headers['X-API-Key'] = apiKey;
+                
+                const resp = await fetch(`/admin/memory/${encodeURIComponent(userId)}`, { headers });
                 if (!resp.ok) return;
                 const data = await resp.json();
                 if (data.status !== 'success') return;
@@ -1234,9 +1288,16 @@
                 // NOTE: This fetch call will fail in the preview environment
                 // because the /sales-agent endpoint does not exist here.
                 // It is preserved for your live deployment.
+                // Get API key from localStorage or use empty string (for development)
+                const apiKey = localStorage.getItem('api_key') || '';
+                const headers = { 'Content-Type': 'application/json' };
+                if (apiKey) {
+                    headers['X-API-Key'] = apiKey;
+                }
+                
                 const response = await fetch('/sales-agent', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: headers,
                     body: JSON.stringify({
                         session_id: requestSessionId,
                         user_id: currentUserId,
@@ -1439,14 +1500,35 @@
             scrollToBottom();
 
             // Animate the phase text: Thinking → Acting → Preparing response
-            const phases = ['Thinking…', 'Acting…', 'Preparing response…'];
+            // Use realistic timing to match actual processing stages
+            const phases = [
+                { text: 'Thinking…', duration: 3000 },      // 3 seconds - planning phase
+                { text: 'Acting…', duration: 4000 },        // 4 seconds - tool execution
+                { text: 'Preparing response…', duration: 2500 }  // 2.5 seconds - response generation
+            ];
             let phaseIndex = 0;
             const phaseSpan = row.querySelector('.typing-phase');
+            
             if (phaseSpan) {
-                const timerId = setInterval(() => {
-                    phaseIndex = (phaseIndex + 1) % phases.length;
-                    phaseSpan.textContent = phases[phaseIndex];
-                }, 1400);
+                const advancePhase = () => {
+                    if (phaseIndex < phases.length) {
+                        phaseSpan.textContent = phases[phaseIndex].text;
+                        phaseIndex++;
+                        if (phaseIndex < phases.length) {
+                            // Schedule next phase transition
+                            const timerId = setTimeout(advancePhase, phases[phaseIndex].duration);
+                            loadingPhaseTimers.set(id, timerId);
+                        } else {
+                            // Loop back to start if still loading
+                            phaseIndex = 0;
+                            const timerId = setTimeout(advancePhase, phases[0].duration);
+                            loadingPhaseTimers.set(id, timerId);
+                        }
+                    }
+                };
+                
+                // Start the phase animation
+                const timerId = setTimeout(advancePhase, phases[0].duration);
                 loadingPhaseTimers.set(id, timerId);
             }
         }
@@ -1458,7 +1540,7 @@
             // Stop any phase animation timer for this loading indicator
             if (loadingPhaseTimers.has(id)) {
                 const timerId = loadingPhaseTimers.get(id);
-                clearInterval(timerId);
+                clearTimeout(timerId);  // Changed from clearInterval to clearTimeout
                 loadingPhaseTimers.delete(id);
             }
 
@@ -1600,90 +1682,120 @@
         // Hover text shows the specific agents/tools involved (planner, validator, inventory agent, DB, etc.).
         function renderFlowToContainer(trace, container) {
             const steps = [];
-            const execSteps = trace.execution_steps || [];
-
-            // Derive which conceptual agents were involved for this turn
-            const usedInventory = execSteps.some(s => s.step === 'check_inventory');
-            const usedRecommend = execSteps.some(s => s.step === 'recommend_products');
-            const usedProfile   = execSteps.some(s => s.step === 'get_user_profile');
-            const usedMemory    = execSteps.some(s => s.step === 'get_session_context');
-            const usedLoyalty   = execSteps.some(s => s.step === 'apply_loyalty');
-            const usedPayment   = execSteps.some(s => s.step === 'calculate_payment');
-            const usedFulfill   = execSteps.some(s => s.step === 'suggest_fulfillment');
-
-            const agentNames = [];
-            // Core abstract agents always in play
-            agentNames.push('Planner agent');
-            agentNames.push(trace.validation_passed ? 'Validator agent (valid)' : 'Validator agent (invalid)');
-            if (trace.governance_used) {
-                agentNames.push('Governance agent');
-            }
-            if (usedProfile)  agentNames.push('Profile agent');
-            if (usedMemory)   agentNames.push('Memory agent');
-            if (usedInventory) agentNames.push('Inventory agent');
-            if (usedRecommend) agentNames.push('Recommendation agent');
-            if (usedLoyalty)  agentNames.push('Loyalty agent');
-            if (usedPayment)  agentNames.push('Payment agent');
-            if (usedFulfill)  agentNames.push('Fulfillment agent');
-
-            // Build tool list, including DB + concrete tools
-            const toolSet = new Set();
-            execSteps.forEach(s => {
-                if (s.step) toolSet.add(s.step);
-            });
-
-            // If any DB-backed tools were used, surface DB explicitly
-            const dbBacked = ['check_inventory','recommend_products','apply_loyalty','calculate_payment','suggest_fulfillment','get_user_profile'];
-            const usedDbBacked = dbBacked.filter(name => toolSet.has(name));
-            const toolNames = [];
-            if (usedDbBacked.length > 0) {
-                toolNames.push('DB (underlying reads/writes)');
-            }
-            if (usedInventory) {
-                // Ensure inventory agent is explicitly mentioned when inventory is accessed
-                toolNames.push('Inventory tool (check_inventory)');
-            }
-            toolSet.forEach(name => {
-                if (!dbBacked.includes(name)) {
-                    toolNames.push(name);
-                }
-            });
-
-            // 1) Sales Agent node
-            steps.push({
-                icon: '🛍️',
-                label: 'Sales Agent',
-                class: 'agent',
-                title: 'Sales Agent: orchestrates planning, agents, and tools for your request.'
-            });
-
-            // 2) Aggregated Agent node
-            const agentsTitle = agentNames.length
-                ? 'Agents involved:\n- ' + agentNames.join('\n- ')
-                : 'Agents involved: Sales Agent only';
-            steps.push({
-                icon: '🤖',
-                label: 'Agent',
-                class: 'agent',
-                title: agentsTitle
-            });
-
-            // 3) Aggregated Tool node
-            const validText = trace.validation_passed ? 'Valid' : 'Invalid';
-            let toolsTitle;
-            if (toolNames.length === 0) {
-                toolsTitle = `Tools used: none\nValidation: ${validText}`;
+            
+            // Use LLM-generated workflow flow if available (automated flow visualization)
+            if (trace.workflow_flow && Array.isArray(trace.workflow_flow) && trace.workflow_flow.length > 0) {
+                steps.push(...trace.workflow_flow);
             } else {
-                toolsTitle = 'Tools used:\n- ' + toolNames.join('\n- ') + `\nValidation: ${validText}`;
-            }
-            steps.push({
-                icon: toolNames.length ? '🛠️' : 'ℹ️',
-                label: 'Tool',
-                class: trace.validation_passed ? 'tool' : 'error-state',
-                title: toolsTitle
-            });
+                // Fallback to deterministic flow generation
+                const execSteps = trace.execution_steps || [];
+                
+                // Check if this was a trivial query (no tools executed)
+                const hasTools = execSteps.length > 0;
+                const plan = trace.plan || {};
+                const needsTools = plan.needs_tools !== false; // Default to true if not specified
+                
+                // For trivial queries (no tools needed), only show Sales Agent
+                if (!hasTools && !needsTools) {
+                    steps.push({
+                        icon: '🛍️',
+                        label: 'Sales Agent',
+                        class: 'agent',
+                        title: 'Sales Agent: Direct response without tools.'
+                    });
+                } else {
+                // Map tool names to their corresponding agents
+                const toolToAgent = {
+                    'check_inventory': { name: 'Inventory Agent', icon: '📦' },
+                    'recommend_products': { name: 'Recommendation Agent', icon: '🎯' },
+                    'get_user_profile': { name: 'Profile Agent', icon: '👤' },
+                    'get_session_context': { name: 'Memory Agent', icon: '🧠' },
+                    'apply_offers': { name: 'Loyalty Agent', icon: '⭐' },
+                    'calculate_payment': { name: 'Payment Agent', icon: '💳' },
+                    'get_fulfillment_options': { name: 'Fulfillment Agent', icon: '🚚' },
+                    'suggest_fulfillment': { name: 'Fulfillment Agent', icon: '🚚' }
+                };
+                
+                // DB-backed tools that require database access
+                const dbBackedTools = ['check_inventory', 'recommend_products', 'apply_offers', 'calculate_payment', 'get_fulfillment_options', 'suggest_fulfillment', 'get_user_profile'];
+                
+                // 1) Sales Agent node (always shown first)
+                steps.push({
+                    icon: '🛍️',
+                    label: 'Sales Agent',
+                    class: 'agent',
+                    title: 'Sales Agent: orchestrates planning, agents, and tools for your request.'
+                });
 
-            // Render the compact 3-node flow
+                // 2) Build flow based on execution order
+                let lastAgentType = null;
+                let dbShown = false;
+                
+                execSteps.forEach((execStep, idx) => {
+                    const toolName = execStep.step;
+                    if (!toolName) return;
+                    
+                    const agentInfo = toolToAgent[toolName];
+                    const needsDb = dbBackedTools.includes(toolName);
+                    
+                    // Show agent node if this tool has an associated agent
+                    if (agentInfo) {
+                        // Only show agent if it's different from the last one (avoid duplicates)
+                        if (lastAgentType !== agentInfo.name) {
+                            steps.push({
+                                icon: agentInfo.icon,
+                                label: agentInfo.name,
+                                class: 'agent',
+                                title: `${agentInfo.name}: Handles ${agentInfo.name.toLowerCase()} operations.`
+                            });
+                            lastAgentType = agentInfo.name;
+                            
+                            // Show DB node right after the first agent that uses DB
+                            if (needsDb && !dbShown) {
+                                steps.push({
+                                    icon: '🗄️',
+                                    label: 'DB',
+                                    class: 'tool',
+                                    title: 'Database: Stores and retrieves product, inventory, user, and order data.'
+                                });
+                                dbShown = true;
+                            }
+                        }
+                    } else if (needsDb && !dbShown) {
+                        // Tool needs DB but has no associated agent - show DB before tool
+                        steps.push({
+                            icon: '🗄️',
+                            label: 'DB',
+                            class: 'tool',
+                            title: 'Database: Stores and retrieves product, inventory, user, and order data.'
+                        });
+                        dbShown = true;
+                    }
+                });
+                
+                // 3) Only add Tool node if there are multiple different agents/tools (3+)
+                // For simple flows with 1-2 agents, end with the last agent/DB
+                if (execSteps.length > 0) {
+                    const toolNames = execSteps.map(s => s.step).filter(Boolean);
+                    const uniqueTools = [...new Set(toolNames)];
+                    
+                    // Only add Tool node if 3+ different tools/agents
+                    if (uniqueTools.length >= 3) {
+                        const validText = trace.validation_passed ? 'Valid' : 'Invalid';
+                        const toolsTitle = 'Tools executed:\n- ' + uniqueTools.join('\n- ') + `\nValidation: ${validText}`;
+                        
+                        steps.push({
+                            icon: '🛠️',
+                            label: 'Tool',
+                            class: trace.validation_passed ? 'tool' : 'error-state',
+                            title: toolsTitle
+                        });
+                    }
+                }
+                }
+            }
+
+            // Render the flow (either LLM-generated or deterministic)
             steps.forEach((step, idx) => {
                 const stepEl = document.createElement('div');
                 stepEl.className = `flow-step ${step.class}`;

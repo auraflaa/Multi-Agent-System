@@ -41,7 +41,8 @@ class PlanRunner:
         plan: AgentPlan,
         session_id: str,
         user_id: str,
-        user_message: str
+        user_message: str,
+        session_context: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """
         Execute a validated plan.
@@ -51,6 +52,7 @@ class PlanRunner:
             session_id: Current session identifier
             user_id: User identifier
             user_message: Original user message
+            session_context: Optional pre-loaded session context (includes personalization, user_profile)
             
         Returns:
             Dictionary containing execution results and final response
@@ -59,11 +61,22 @@ class PlanRunner:
         context = {}
         final_result = {}
         
-        # Get initial session context (user-centric, branched by session)
-        try:
-            context = session.get_session_context(user_id, session_id)
-        except Exception as e:
-            print(f"Warning: Could not load session context for user {user_id}, session {session_id}: {e}")
+        # Use provided session context if available (includes personalization), otherwise load it
+        if session_context:
+            context = session_context.copy()  # Use the provided context with all data
+        else:
+            # Fallback: Get initial session context (user-centric, branched by session)
+            try:
+                context = session.get_session_context(user_id, session_id)
+                # Also load personalization if not in context
+                try:
+                    personalization = session.get_personalization(user_id)
+                    if personalization:
+                        context["personalization"] = personalization
+                except Exception:
+                    pass
+            except Exception as e:
+                print(f"Warning: Could not load session context for user {user_id}, session {session_id}: {e}")
         
         # Execute each step sequentially
         for i, step in enumerate(plan.steps):
@@ -142,6 +155,32 @@ class PlanRunner:
                 resolved_params["gender"] = context["gender"]
             elif "user_gender" in context:
                 resolved_params["gender"] = context["user_gender"]
+        
+        # Auto-inject product_id for check_inventory from previous recommend_products results
+        if step.action == "check_inventory":
+            # If neither sku nor product_id is provided, try to extract from previous steps
+            if "sku" not in resolved_params and "product_id" not in resolved_params:
+                # Look for product_id in previous recommend_products results
+                for prev_step in reversed(previous_steps):
+                    if prev_step.get("step") == "recommend_products" and prev_step.get("success"):
+                        products = prev_step.get("result", [])
+                        if isinstance(products, list) and len(products) > 0:
+                            # Use the first product's product_id
+                            first_product = products[0]
+                            if isinstance(first_product, dict) and "product_id" in first_product:
+                                resolved_params["product_id"] = first_product["product_id"]
+                                break
+                # If still no product_id, check all previous steps for any product results
+                if "product_id" not in resolved_params:
+                    for prev_step in reversed(previous_steps):
+                        result = prev_step.get("result")
+                        if isinstance(result, list):
+                            for item in result:
+                                if isinstance(item, dict) and "product_id" in item:
+                                    resolved_params["product_id"] = item["product_id"]
+                                    break
+                            if "product_id" in resolved_params:
+                                break
         
         try:
             # Execute the tool

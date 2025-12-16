@@ -28,6 +28,11 @@ LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.5-flash")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "google")  # google, openai, etc.
 
+# Security Configuration
+API_KEY = os.getenv("API_KEY", "")  # API key for authentication (optional for development)
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000").split(",")
+ALLOWED_ORIGINS = [origin.strip() for origin in ALLOWED_ORIGINS if origin.strip()]
+
 
 def validate_config():
     """Validate configuration on startup. Fail fast if API key is missing."""
