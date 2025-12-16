@@ -19,8 +19,8 @@ MEMORY_DIR = BASE_DIR / "app" / "memory" / "sessions"
 MEMORY_DIR.mkdir(parents=True, exist_ok=True)
 
 # LLM Configuration
-# Default to a widely available Gemini model; can be overridden via LLM_MODEL env var
-LLM_MODEL = os.getenv("LLM_MODEL", "gemini-1.5-flash")
+# Default to a stable Gemini model; can be overridden via LLM_MODEL env var
+LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.5-flash")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "google")  # google, openai, etc.
 
@@ -39,6 +39,7 @@ AVAILABLE_TOOLS = {
     "get_session_context",
     "save_session_context",
     "get_user_profile",
+    "update_user_name",
     "check_inventory",
     "recommend_products",
     "apply_offers",

@@ -22,6 +22,7 @@ class PlanRunner:
         "get_session_context": session.get_session_context,
         "save_session_context": session.save_session_context,
         "get_user_profile": users.get_user_profile,
+        "update_user_name": users.update_user_name,
         "check_inventory": inventory.check_inventory,
         "recommend_products": recommendations.recommend_products,
         "apply_offers": loyalty.apply_offers,

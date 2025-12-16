@@ -17,14 +17,41 @@ def init_database():
     conn = get_db_connection()
     cursor = conn.cursor()
     
+    # Create loyalty_tiers lookup table
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS loyalty_tiers (
+            tier TEXT PRIMARY KEY,
+            display_name TEXT NOT NULL,
+            sort_order INTEGER NOT NULL
+        )
+        """
+    )
+
+    # Seed default tiers if table is empty
+    cursor.execute("SELECT COUNT(*) AS c FROM loyalty_tiers")
+    count_row = cursor.fetchone()
+    if count_row and count_row["c"] == 0:
+        cursor.executemany(
+            "INSERT INTO loyalty_tiers (tier, display_name, sort_order) VALUES (?, ?, ?)",
+            [
+                ("bronze", "Bronze", 1),
+                ("silver", "Silver", 2),
+                ("gold", "Gold", 3),
+                ("platinum", "Platinum", 4),
+            ],
+        )
+
     # Create users table
-    cursor.execute("""
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS users (
             user_id TEXT PRIMARY KEY,
             name TEXT,
             loyalty_tier TEXT
         )
-    """)
+        """
+    )
     
     # Create categories table (normalized product categories)
     cursor.execute(

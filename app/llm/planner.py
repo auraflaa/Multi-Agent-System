@@ -54,30 +54,47 @@ class SalesAgentPlanner:
         user_id: str,
         session_context: Dict[str, Any]
     ) -> str:
-        """Build the user prompt with minimal essential context."""
-        # Extract only essential context (avoid token bloat)
-        essential_context = {}
-        
-        # Last message (if exists)
+        """Build the user prompt with bounded but richer session context."""
+        essential_context: Dict[str, Any] = {}
+
+        # Last intent / message (if exists)
         if "last_message" in session_context:
             essential_context["last_message"] = session_context["last_message"]
-        
+        if "last_intent" in session_context:
+            essential_context["last_intent"] = session_context["last_intent"]
+
         # User preferences (if exists)
         if "preferred_category" in session_context:
             essential_context["preferred_category"] = session_context["preferred_category"]
         if "budget" in session_context:
             essential_context["budget"] = session_context["budget"]
-        
+
         # Loyalty tier (if exists)
         if "loyalty_tier" in session_context:
             essential_context["loyalty_tier"] = session_context["loyalty_tier"]
-        
+
+        # Recent bounded conversation history for better context
+        history = session_context.get("message_history", [])
+        if isinstance(history, list) and history:
+            # Take last 5 turns and truncate text to keep tokens in check
+            compact_history = []
+            for turn in history[-5:]:
+                compact_history.append(
+                    {
+                        "user": str(turn.get("user", ""))[:300],
+                        "response": str(turn.get("response", ""))[:300],
+                        "intent": str(turn.get("intent", "")),
+                    }
+                )
+            essential_context["recent_history"] = compact_history
+
         context_str = json.dumps(essential_context) if essential_context else "{}"
-        
+
         return f"""User Message: "{user_message}"
 
 User ID: {user_id}
-Essential Context: {context_str}
+Session ID: {session_id}
+Session Context (bounded): {context_str}
 
 Generate a JSON action plan."""
     

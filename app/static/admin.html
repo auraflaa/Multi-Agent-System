@@ -90,6 +90,7 @@
                         <option value="inventory">inventory</option>
                         <option value="orders">orders</option>
                         <option value="categories">categories</option>
+                        <option value="loyalty_tiers">loyalty_tiers</option>
                     </select>
                     <label for="csvFile">CSV File</label>
                     <input type="file" id="csvFile" accept=".csv" />
@@ -108,6 +109,7 @@
                         <option value="inventory">inventory</option>
                         <option value="orders">orders</option>
                         <option value="categories">categories</option>
+                        <option value="loyalty_tiers">loyalty_tiers</option>
                     </select>
                     <button id="loadTableBtn">Load Table</button>
                     <div id="dbResult"></div>
@@ -120,7 +122,7 @@
             <label for="memoryUserId">User ID</label>
             <input type="text" id="memoryUserId" placeholder="e.g., 001 (same as in users table)" />
             <button id="loadMemoryBtn">Load Memory</button>
-            <pre id="memoryResult"></pre>
+            <div id="memoryResult"></div>
         </div>
     </div>
 
@@ -165,7 +167,12 @@
             <label>Name</label>
             <input id="userNameInput" placeholder="Alice Johnson">
             <label>Loyalty Tier</label>
-            <input id="userTierInput" placeholder="bronze / silver / gold / platinum">
+            <select id="userTierInput">
+                <option value="bronze">bronze</option>
+                <option value="silver">silver</option>
+                <option value="gold">gold</option>
+                <option value="platinum">platinum</option>
+            </select>
             <button id="userSaveBtn">Create / Update User</button>
             <button id="userDeleteBtn" style="background:#dc2626;margin-left:8px;">Delete User</button>
             <pre id="userCrudResult"></pre>
@@ -193,7 +200,15 @@
             <label>Product ID</label>
             <input id="invProductIdInput" placeholder="PROD-001 (must exist in Products)">
             <label>Size</label>
-            <input id="invSizeInput" placeholder="e.g., S / M / L">
+            <select id="invSizeInput">
+                <option value="">-- Select size --</option>
+                <option value="XS">XS</option>
+                <option value="S">S</option>
+                <option value="M">M</option>
+                <option value="L">L</option>
+                <option value="XL">XL</option>
+                <option value="XXL">XXL</option>
+            </select>
             <label>Quantity</label>
             <input id="invQtyInput" placeholder="e.g., 50">
             <label>Location</label>
@@ -349,38 +364,67 @@
                 memoryResult.textContent = data.detail || 'Unable to load memory.';
                 return;
             }
+
             const mem = data.memory || {};
             const sessions = mem.sessions || {};
             const sessionIds = Object.keys(sessions);
+
             if (sessionIds.length === 0) {
-                memoryResult.textContent = 'No sessions found for this user yet.';
+                memoryResult.textContent = 'No conversations found for this user yet.';
                 return;
             }
-            let html = `<h3>User ${data.user_id} – ${sessionIds.length} session(s)</h3>`;
-            html += '<ul style="padding-left:16px;">';
-            sessionIds.forEach(id => {
+
+            let html = `<h3>User ${data.user_id} – ${sessionIds.length} conversation(s)</h3>`;
+            html += '<div style="margin-top:8px;">';
+
+            sessionIds.forEach((id, index) => {
                 const s = sessions[id] || {};
-                const step = s.step_0_result || {};
                 const lastMessage = s.last_message || '';
                 const lastIntent = s.last_intent || '';
-                html += '<li style="margin-bottom:8px;">';
-                html += `<strong>${id}</strong>: `;
-                if (step.available === true) {
-                    html += `in stock (qty ${step.quantity ?? '?'}, sku ${step.sku ?? ''}, size ${step.size ?? ''})`;
-                } else if (Object.keys(step).length > 0) {
-                    html += 'tools executed (see latest request below)';
-                } else {
-                    html += 'no tool results yet';
-                }
+                const history = Array.isArray(s.message_history) ? s.message_history : [];
+
+                html += `<details style="margin-bottom:10px; border:1px solid #e5e7eb; border-radius:6px; padding:8px 10px; background:#f9fafb;">`;
+                html += `<summary style="cursor:pointer; font-size:14px; font-weight:600;">`;
+                // Display a compact, reindexed label while keeping the real session_id visible
+                const displayLabel = `Conversation #${index + 1}`;
+                html += `<span>${displayLabel}</span>`;
+                html += `<span style="margin-left:8px; font-size:11px; color:#9ca3af;">(${id})</span>`;
                 if (lastMessage) {
-                    html += `<br><span style="font-size:12px;color:#555;">Last message: "${lastMessage}"</span>`;
+                    html += `<span style="display:block; font-size:12px; font-weight:400; color:#4b5563; margin-top:2px;">Last message: "${lastMessage}"</span>`;
                 }
                 if (lastIntent) {
-                    html += `<br><span style="font-size:12px;color:#555;">Last intent: ${lastIntent}</span>`;
+                    html += `<span style="display:block; font-size:11px; color:#6b7280;">Last intent: ${lastIntent}</span>`;
                 }
-                html += '</li>';
+                html += `</summary>`;
+
+                // Full conversation transcript
+                html += `<div style="margin-top:8px; padding-top:6px; border-top:1px solid #e5e7eb;">`;
+                if (history.length === 0) {
+                    html += `<div style="font-size:12px; color:#6b7280;">No messages stored for this conversation yet.</div>`;
+                } else {
+                    html += `<div style="font-size:12px; color:#111827;">`;
+                    history.forEach((m, idx) => {
+                        const userMsg = m.user || '';
+                        const agentResp = m.response || '';
+                        const intent = m.intent || '';
+                        html += `<div style="margin-bottom:8px; padding-bottom:6px; border-bottom:1px dashed #e5e7eb;">`;
+                        html += `<div><strong>User:</strong> ${userMsg}</div>`;
+                        if (agentResp) {
+                            html += `<div style="margin-top:2px;"><strong>Agent:</strong> ${agentResp}</div>`;
+                        }
+                        if (intent) {
+                            html += `<div style="margin-top:2px; font-size:11px; color:#6b7280;">Intent: ${intent}</div>`;
+                        }
+                        html += `</div>`;
+                    });
+                    html += `</div>`;
+                }
+
+                html += `</div>`; // end transcript
+                html += `</details>`;
             });
-            html += '</ul>';
+
+            html += '</div>';
             memoryResult.innerHTML = html;
         }
 

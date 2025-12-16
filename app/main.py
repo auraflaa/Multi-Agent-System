@@ -24,14 +24,31 @@ from app.schemas.plan_schema import (
 )
 from pydantic import BaseModel
 from typing import Dict, Any
-from app.tools import session, explainability
+from app.tools import session, explainability, users
 from app.db.database import get_db_connection
+
+# Tag metadata for API docs
+tags_metadata = [
+    {
+        "name": "API Info",
+        "description": "High-level API information and landing endpoints.",
+    },
+    {
+        "name": "Sales Agent",
+        "description": "Core sales agent endpoint orchestrating planner → validator → executor.",
+    },
+    {
+        "name": "Health",
+        "description": "Health and readiness checks for deployment.",
+    },
+]
 
 # Initialize FastAPI app
 app = FastAPI(
     title="Multi-Agent Retail System",
     description="Enterprise-style agentic AI system for retail domain",
-    version="1.0.0"
+    version="1.0.0",
+    openapi_tags=tags_metadata,
 )
 
 # CORS middleware
@@ -49,7 +66,7 @@ if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 
-@app.get("/healthz")
+@app.get("/healthz", tags=["Health"], summary="Health check")
 async def healthz():
     """
     Lightweight health check endpoint for Render.
@@ -61,6 +78,21 @@ async def healthz():
 planner = SalesAgentPlanner()
 validator = PlanValidator()
 runner = PlanRunner()
+
+
+def _validate_loyalty_tier(cursor, tier: str) -> None:
+    """Ensure the loyalty tier exists in the lookup table."""
+    if not tier:
+        return
+    cursor.execute("SELECT 1 FROM loyalty_tiers WHERE tier = ?", (tier,))
+    if not cursor.fetchone():
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Invalid loyalty_tier '{tier}'. "
+                "Allowed values are bronze, silver, gold, platinum (from loyalty_tiers table)."
+            ),
+        )
 
 
 def require_user_in_db(user_id: str) -> None:
@@ -108,7 +140,7 @@ async def startup_event():
     print("=" * 60)
 
 
-@app.get("/")
+@app.get("/", tags=["API Info"], summary="Frontend & API info")
 async def root():
     """Root endpoint - serves frontend UI."""
     ui_file = Path(__file__).parent / "static" / "index.html"
@@ -145,7 +177,13 @@ async def api_info():
     }
 
 
-@app.post("/sales-agent", response_model=SalesAgentResponse)
+@app.post(
+    "/sales-agent",
+    response_model=SalesAgentResponse,
+    tags=["Sales Agent"],
+    summary="Sales agent orchestration endpoint",
+    description="Takes a user message plus user/session IDs, runs planner → validator → tools, and returns a conversational response with an execution trace.",
+)
 async def sales_agent(request: SalesAgentRequest) -> SalesAgentResponse:
     """
     Main sales agent endpoint that orchestrates the agent flow.
@@ -161,11 +199,25 @@ async def sales_agent(request: SalesAgentRequest) -> SalesAgentResponse:
     )
     
     try:
+        # Enforce non-empty session_id for correct per-chat isolation
+        if not request.session_id:
+            raise HTTPException(status_code=400, detail="session_id is required and cannot be empty")
+
         # Enforce DB-first sync: user must exist in SQLite
         require_user_in_db(request.user_id)
 
         # Get session context (user-centric, branched by session)
         session_context = session.get_session_context(request.user_id, request.session_id)
+
+        # Enrich session context with stable user profile for better planning
+        try:
+            profile = users.get_user_profile(request.user_id)
+            # Store full profile and expose loyalty_tier at top level
+            session_context.setdefault("user_profile", profile)
+            if profile.get("loyalty_tier"):
+                session_context.setdefault("loyalty_tier", profile["loyalty_tier"])
+        except Exception as e:
+            print(f"Warning: could not enrich session context with user profile for {request.user_id}: {e}")
         
         # Step 1: Planner generates plan
         plan_dict, original_llm_response = planner.generate_plan(
@@ -203,7 +255,8 @@ async def sales_agent(request: SalesAgentRequest) -> SalesAgentResponse:
             # Return error response
             return SalesAgentResponse(
                 response=f"I encountered an error planning your request: {', '.join(errors)}",
-                execution_trace=execution_trace
+                execution_trace=execution_trace,
+                session_id=request.session_id,  # Echo back session_id even on validation failure
             )
         
         # Step 3: Execute plan
@@ -232,7 +285,8 @@ async def sales_agent(request: SalesAgentRequest) -> SalesAgentResponse:
         
         return SalesAgentResponse(
             response=execution_result.get("response", "Request processed successfully."),
-            execution_trace=execution_trace
+            execution_trace=execution_trace,
+            session_id=request.session_id  # Echo back session_id for frontend isolation
         )
     
     except HTTPException as http_exc:
@@ -245,6 +299,7 @@ async def sales_agent(request: SalesAgentRequest) -> SalesAgentResponse:
                 f"needs attention: {detail}"
             ),
             execution_trace=execution_trace,
+            session_id=request.session_id if hasattr(request, 'session_id') else ''  # Echo back session_id
         )
     except Exception as e:
         # Generic catch-all: keep raw error only in the trace, not in the user message
@@ -255,6 +310,7 @@ async def sales_agent(request: SalesAgentRequest) -> SalesAgentResponse:
                 "Please try again in a moment or check the admin console/logs for more details."
             ),
             execution_trace=execution_trace,
+            session_id=request.session_id if hasattr(request, 'session_id') else ''  # Echo back session_id
         )
 
 
@@ -267,10 +323,16 @@ async def add_user(user_data: AdminUserRequest):
     cursor = conn.cursor()
     
     try:
-        cursor.execute("""
+        # Validate tier against loyalty_tiers lookup
+        _validate_loyalty_tier(cursor, user_data.loyalty_tier)
+
+        cursor.execute(
+            """
             INSERT OR REPLACE INTO users (user_id, name, loyalty_tier)
             VALUES (?, ?, ?)
-        """, (user_data.user_id, user_data.name, user_data.loyalty_tier))
+            """,
+            (user_data.user_id, user_data.name, user_data.loyalty_tier),
+        )
         
         conn.commit()
         return {
@@ -570,7 +632,7 @@ async def add_order(order_data: AdminOrderRequest):
 
 # ==================== ADMIN ENDPOINTS (CSV + DB VIEW) ====================
 
-ALLOWED_TABLES = {"users", "products", "inventory", "orders", "categories"}
+ALLOWED_TABLES = {"users", "products", "inventory", "orders", "categories", "loyalty_tiers"}
 
 
 @app.post("/admin/upload-csv/{table}")
@@ -669,6 +731,19 @@ async def upload_csv(table: str, file: UploadFile = File(...)):
                     (
                         row.get("category_id"),
                         row.get("name"),
+                    ),
+                    )
+        elif table == "loyalty_tiers":
+            for row in rows:
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO loyalty_tiers (tier, display_name, sort_order)
+                    VALUES (?, ?, ?)
+                    """,
+                    (
+                        row.get("tier"),
+                        row.get("display_name") or row.get("tier"),
+                        int(row.get("sort_order", 0) or 0),
                     ),
                 )
 

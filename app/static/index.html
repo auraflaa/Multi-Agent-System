@@ -239,6 +239,13 @@
             background: #eef2ff;
         }
 
+        .session-item-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+        }
+
         .session-item-title {
             font-weight: 600;
             white-space: nowrap;
@@ -249,6 +256,64 @@
         .session-item-meta {
             font-size: 11px;
             color: var(--text-muted);
+        }
+
+        .session-delete-btn {
+            border: none;
+            background: transparent;
+            color: #9ca3af;
+            cursor: pointer;
+            padding: 0;
+            font-size: 14px;
+            line-height: 1;
+            border-radius: 999px;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .session-delete-btn:hover {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #111827;
+            color: #f9fafb;
+            padding: 10px 14px;
+            border-radius: 999px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            z-index: 2000;
+        }
+
+        .toast button {
+            border: none;
+            background: #f9fafb;
+            color: #111827;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .toast.toast-inline {
+            position: static;
+            margin-top: 8px;
+            background: #111827;
+            color: #f9fafb;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            box-shadow: none;
         }
 
         .new-chat-btn {
@@ -271,6 +336,42 @@
             flex: 1;
             display: flex;
             flex-direction: column;
+        }
+
+        .starter-prompts {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 16px 24px 0 24px;
+        }
+
+        .starter-chip {
+            padding: 6px 12px;
+            border-radius: 999px;
+            border: 1px solid #e5e7eb;
+            background: #f9fafb;
+            font-size: 12px;
+            color: #4b5563;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+        }
+
+        .starter-chip span.icon {
+            font-size: 13px;
+        }
+
+        .starter-chip:hover {
+            background: #eef2ff;
+            box-shadow: 0 2px 6px rgba(148, 163, 184, 0.35);
+            transform: translateY(-1px);
+        }
+
+        .starter-chip:active {
+            transform: translateY(0);
+            box-shadow: none;
         }
 
         /* Chat Area */
@@ -389,30 +490,42 @@
         }
 
         .send-btn {
-        .send-btn {
             background: var(--primary-gradient);
             color: white;
             border: none;
-            border-radius: 12px;
-            width: 42px;
-            height: 42px;
+            border-radius: 999px;
+            width: 44px;
+            height: 44px;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.2s;
+            transition: transform 0.12s ease, box-shadow 0.18s ease, background 0.18s ease;
             flex-shrink: 0;
             margin-bottom: 3px;
-            /* Add discernible text via aria-label attribute in HTML */
+            box-shadow: 0 8px 20px rgba(99, 102, 241, 0.35);
+        }
+
+        .send-btn svg {
+            filter: drop-shadow(0 1px 2px rgba(0,0,0,0.25));
         }
 
         .send-btn:hover { 
-            transform: scale(1.05); 
-            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+            transform: translateY(-1px) scale(1.03); 
+            box-shadow: 0 10px 24px rgba(99, 102, 241, 0.45);
         }
         
-        .send-btn:active { transform: scale(0.95); }
-        .send-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+        .send-btn:active { 
+            transform: translateY(0) scale(0.96);
+            box-shadow: 0 4px 10px rgba(55, 48, 163, 0.5);
+        }
+
+        .send-btn:disabled { 
+            opacity: 0.55; 
+            cursor: not-allowed; 
+            transform: none; 
+            box-shadow: none; 
+        }
 
         /* --- Visualization Styles --- */
         .trace-box {
@@ -452,11 +565,19 @@
             font-weight: 600;
             border: 1px solid transparent;
             box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            cursor: pointer;
+            transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
+        }
+
+        .flow-step:hover {
+            box-shadow: 0 4px 6px rgba(0,0,0,0.06);
+            transform: translateY(-1px);
         }
 
         .flow-step.planner { background: #eff6ff; color: #1d4ed8; border-color: #dbeafe; }
         .flow-step.validator { background: #f0fdf4; color: #15803d; border-color: #dcfce7; }
         .flow-step.governance { background: #fffbeb; color: #b45309; border-color: #fef3c7; }
+        .flow-step.agent { background: #eef2ff; color: #4338ca; border-color: #e0e7ff; }
         .flow-step.tool { background: #f3f4f6; color: #374151; border-color: #e5e7eb; }
         .flow-step.error-state { background: #fef2f2; color: #b91c1c; border-color: #fee2e2; }
         
@@ -556,21 +677,47 @@
                     </div>
                 </div>
 
+                <!-- Starter suggestion chips -->
+                <div class="starter-prompts" id="starterPrompts">
+                    <button type="button" class="starter-chip" data-question="How can you help me with my shopping?">
+                        <span class="icon">💡</span>
+                        <span>What can you help with?</span>
+                    </button>
+                    <button type="button" class="starter-chip" data-question="Recommend some products for a casual weekend outing.">
+                        <span class="icon">🛍️</span>
+                        <span>Casual outfit ideas</span>
+                    </button>
+                    <button type="button" class="starter-chip" data-question="Help me check if a product is in stock in my size.">
+                        <span class="icon">📦</span>
+                        <span>Check if something is in stock</span>
+                    </button>
+                    <button type="button" class="starter-chip" data-question="Suggest some budget-friendly options I might like.">
+                        <span class="icon">💳</span>
+                        <span>Budget-friendly picks</span>
+                    </button>
+                </div>
+
                 <div class="input-area">
                     <div class="input-wrapper">
                         <textarea id="messageInput" placeholder="Ask anything about products or your account..." onkeydown="handleEnter(event)"></textarea>
                         <button id="sendBtn" class="send-btn" onclick="sendMessage()" aria-label="Send message" title="Send message">
-                            <!-- Refined paper-plane icon -->
+                            <!-- Clean outline paper-plane icon -->
                             <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
-                                <defs>
-                                    <linearGradient id="sendGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                                        <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95" />
-                                        <stop offset="100%" stop-color="#e5e7eb" stop-opacity="1" />
-                                    </linearGradient>
-                                </defs>
-                                <circle cx="12" cy="12" r="11" fill="rgba(15,23,42,0.12)"></circle>
-                                <path d="M5 12.5L18.5 4.5C19.3 4 20.2 4.8 19.8 5.7L15.7 15.5C15.5 15.9 15.1 16.1 14.7 16L11.9 15.1C11.7 15 11.5 15.1 11.4 15.3L10.2 18C9.8 18.9 8.5 18.8 8.3 17.8L6.7 13.2C6.5 12.7 5.9 12.3 5 12.5Z"
-                                      fill="url(#sendGradient)" stroke="#ffffff" stroke-width="1.1" />
+                                <path
+                                    d="M4 4.5L20 3L13.5 13.5L10.5 20L8.75 13.25L4 4.5Z"
+                                    fill="none"
+                                    stroke="white"
+                                    stroke-width="1.8"
+                                    stroke-linejoin="round"
+                                    stroke-linecap="round"
+                                />
+                                <path
+                                    d="M8.5 13.5L13.5 13.5"
+                                    fill="none"
+                                    stroke="white"
+                                    stroke-width="1.6"
+                                    stroke-linecap="round"
+                                />
                             </svg>
                         </button>
                     </div>
@@ -585,7 +732,10 @@
     <script>
         // --- State Management ---
         let currentUserId = '';
+        let currentUserName = '';
         let currentSessionId = '';
+        // Track in-flight request per session to allow concurrency across different chats
+        let sendingForSessionId = null;
 
         const loginOverlay = document.getElementById('loginOverlay');
         const appContainer = document.getElementById('appContainer');
@@ -596,11 +746,11 @@
         const hiddenSessionIdInput = document.getElementById('hiddenSessionId');
         const sessionListEl = document.getElementById('sessionList');
         const newChatBtn = document.getElementById('newChatBtn');
+        const starterPromptsEl = document.getElementById('starterPrompts');
         
-        // --- Session Logic (Preserved, now multi-session) ---
-        function getOrCreateSessionId(userId) {
+        // --- Session Logic (multi-session, isolated per chat) ---
+        function createNewSessionId(userId) {
             if (!userId) return '';
-            if (currentSessionId) return currentSessionId;
             const key = `mas_session_index_${userId}`;
             let idx = parseInt(localStorage.getItem(key) || '0', 10);
             idx += 1;
@@ -608,6 +758,33 @@
             currentSessionId = `session_${idx}`;
             hiddenSessionIdInput.value = currentSessionId;
             return currentSessionId;
+        }
+
+        function getOrCreateSessionId(userId) {
+            if (!userId) return '';
+            if (currentSessionId) return currentSessionId;
+
+            // Reuse most recent existing session for this user if available
+            const listKey = getSessionListKey(userId);
+            const rawList = localStorage.getItem(listKey);
+            if (rawList) {
+                try {
+                    let sessions = JSON.parse(rawList) || [];
+                    // Filter out any malformed entries with empty / missing ids
+                    sessions = sessions.filter(s => s && s.id);
+                    localStorage.setItem(listKey, JSON.stringify(sessions));
+                    if (sessions.length > 0 && sessions[0].id) {
+                        currentSessionId = sessions[0].id;
+                        hiddenSessionIdInput.value = currentSessionId;
+                        return currentSessionId;
+                    }
+                } catch (e) {
+                    // fall through to creating a new session
+                }
+            }
+
+            // No existing sessions: create a brand new one
+            return createNewSessionId(userId);
         }
 
         function getSessionStorageKey(userId, sessionId) {
@@ -618,6 +795,22 @@
             return `mas_sessions_${userId}`;
         }
 
+        function clearAllLocalSessionsForUser(userId) {
+            if (!userId) return;
+            const listKey = getSessionListKey(userId);
+            const raw = localStorage.getItem(listKey);
+            let sessions = [];
+            if (raw) {
+                try { sessions = JSON.parse(raw) || []; } catch (e) { sessions = []; }
+            }
+            sessions.forEach((s) => {
+                if (s.id) {
+                    localStorage.removeItem(getSessionStorageKey(userId, s.id));
+                }
+            });
+            localStorage.removeItem(listKey);
+        }
+
         function loadSessionList() {
             if (!currentUserId) return;
             const key = getSessionListKey(currentUserId);
@@ -626,15 +819,42 @@
             if (raw) {
                 try { sessions = JSON.parse(raw) || []; } catch (e) { sessions = []; }
             }
+            // Drop any sessions with empty/missing ids
+            sessions = sessions.filter(s => s && s.id);
+            localStorage.setItem(key, JSON.stringify(sessions));
             sessionListEl.innerHTML = '';
             sessions.forEach((s) => {
                 const item = document.createElement('div');
                 item.className = 'session-item' + (s.id === currentSessionId ? ' active' : '');
                 item.dataset.sessionId = s.id;
-                item.innerHTML = `
-                    <div class="session-item-title">${s.title || 'Conversation'}</div>
-                    <div class="session-item-meta">${s.created_at || ''}</div>
-                `;
+
+                const headerRow = document.createElement('div');
+                headerRow.className = 'session-item-header-row';
+
+                const titleEl = document.createElement('div');
+                titleEl.className = 'session-item-title';
+                titleEl.textContent = s.title || 'Conversation';
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'session-delete-btn';
+                deleteBtn.type = 'button';
+                deleteBtn.textContent = '×';
+                deleteBtn.title = 'Delete this chat';
+                deleteBtn.addEventListener('click', (evt) => {
+                    evt.stopPropagation();
+                    deleteSession(s.id);
+                });
+
+                headerRow.appendChild(titleEl);
+                headerRow.appendChild(deleteBtn);
+
+                const metaEl = document.createElement('div');
+                metaEl.className = 'session-item-meta';
+                metaEl.textContent = s.created_at || '';
+
+                item.appendChild(headerRow);
+                item.appendChild(metaEl);
+
                 item.onclick = () => switchSession(s.id);
                 sessionListEl.appendChild(item);
             });
@@ -648,6 +868,8 @@
             if (raw) {
                 try { sessions = JSON.parse(raw) || []; } catch (e) { sessions = []; }
             }
+            // Keep only well-formed entries
+            sessions = sessions.filter(s => s && s.id);
             const existing = sessions.find((s) => s.id === currentSessionId);
             const title = (firstUserMessage || 'New conversation').slice(0, 32);
             const now = new Date();
@@ -687,16 +909,129 @@
             }
         }
 
+        function showDeleteToast(sessionId) {
+            const existing = document.getElementById('deleteToast');
+            if (existing) existing.remove();
+
+            const toast = document.createElement('div');
+            toast.id = 'deleteToast';
+            toast.className = 'toast';
+            toast.innerHTML = `<span>Delete this chat conversation?</span>`;
+
+            const confirmBtn = document.createElement('button');
+            confirmBtn.textContent = 'Delete';
+            confirmBtn.onclick = () => {
+                toast.remove();
+                performDeleteSession(sessionId);
+            };
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.onclick = () => toast.remove();
+
+            toast.appendChild(confirmBtn);
+            toast.appendChild(cancelBtn);
+            document.body.appendChild(toast);
+
+            // Auto-dismiss after a few seconds
+            setTimeout(() => {
+                if (toast.parentNode) toast.remove();
+            }, 5000);
+        }
+
+        function showInlineSendingToast() {
+            // Remove any existing inline toast
+            const existing = document.getElementById('sendingToast');
+            if (existing) existing.remove();
+
+            const toast = document.createElement('div');
+            toast.id = 'sendingToast';
+            toast.className = 'toast toast-inline';
+            toast.textContent =
+                "I'm still processing your previous request. Because of current server resource limits, I can handle only one message at a time. Please wait a moment.";
+
+            const container = document.querySelector('.input-area');
+            if (container) {
+                container.appendChild(toast);
+                setTimeout(() => {
+                    if (toast.parentNode) toast.remove();
+                }, 4000);
+            }
+        }
+
+        function deleteSession(sessionId) {
+            if (!currentUserId || !sessionId) return;
+            showDeleteToast(sessionId);
+        }
+
+        function performDeleteSession(sessionId) {
+            if (!currentUserId || !sessionId) return;
+
+            // Remove from local session list
+            const listKey = getSessionListKey(currentUserId);
+            const raw = localStorage.getItem(listKey);
+            let sessions = [];
+            if (raw) {
+                try { sessions = JSON.parse(raw) || []; } catch (e) { sessions = []; }
+            }
+            sessions = sessions.filter(s => s.id !== sessionId);
+            localStorage.setItem(listKey, JSON.stringify(sessions));
+
+            // Remove stored chat history for this session
+            localStorage.removeItem(getSessionStorageKey(currentUserId, sessionId));
+
+            // If this was the active session, reset view
+            if (currentSessionId === sessionId) {
+                currentSessionId = '';
+                hiddenSessionIdInput.value = '';
+                chatHistory.innerHTML = '';
+                if (starterPromptsEl) {
+                    starterPromptsEl.style.display = 'flex';
+                }
+            }
+
+            loadSessionList();
+
+            // Best-effort server-side cleanup (admin endpoint)
+            fetch(`/admin/session/${encodeURIComponent(currentUserId)}/${encodeURIComponent(sessionId)}`, {
+                method: 'DELETE'
+            }).catch(() => {
+                // Swallow network errors; local deletion is still effective
+            });
+        }
+
         // --- Event Listeners ---
 
-        async function userExists(uid) {
+        async function fetchUser(uid) {
             try {
                 const resp = await fetch(`/admin/users/${uid}`);
-                if (!resp.ok) return false;
+                if (!resp.ok) return null;
                 const data = await resp.json();
-                return data.status === 'success';
+                if (data.status === 'success' && data.user) {
+                    return data.user;
+                }
+                return null;
             } catch (e) {
-                return false;
+                return null;
+            }
+        }
+
+        async function syncSessionsWithServer(userId) {
+            if (!userId) return;
+            try {
+                const resp = await fetch(`/admin/memory/${encodeURIComponent(userId)}`);
+                if (!resp.ok) return;
+                const data = await resp.json();
+                if (data.status !== 'success') return;
+                const mem = data.memory || {};
+                const sessions = mem.sessions || {};
+                const serverSessionIds = Object.keys(sessions);
+                // If server reports no sessions, wipe local copies for a clean slate
+                if (serverSessionIds.length === 0) {
+                    clearAllLocalSessionsForUser(userId);
+                }
+            } catch (e) {
+                // If this fails, we silently continue with local state
             }
         }
 
@@ -705,8 +1040,8 @@
             e.preventDefault();
             const uid = document.getElementById('loginUserId').value.trim();
             if(uid) {
-                const exists = await userExists(uid);
-                if (!exists) {
+                const user = await fetchUser(uid);
+                if (!user) {
                     document.getElementById('loginError').textContent =
                         "User not found in database. Please create it in Admin Console > Users.";
                     return;
@@ -714,10 +1049,15 @@
                 document.getElementById('loginError').textContent = "";
 
                 currentUserId = uid;
+                currentUserName = user.name || uid;
+
+                // Sync local sessions with server memory (clear local if server is empty)
+                await syncSessionsWithServer(uid);
+
                 currentSessionId = getOrCreateSessionId(uid);
 
                 // Update UI
-                document.getElementById('displayUserId').textContent = currentUserId;
+                document.getElementById('displayUserId').textContent = currentUserName;
                 
                 // Load existing sessions & history if any
                 loadSessionList();
@@ -733,11 +1073,25 @@
             }
         });
 
+        // Starter prompt chips: click to auto-fill and send
+        if (starterPromptsEl) {
+            starterPromptsEl.addEventListener('click', (e) => {
+                const target = e.target.closest('.starter-chip');
+                if (!target) return;
+                const question = target.getAttribute('data-question');
+                if (!question) return;
+                messageInput.value = question;
+                // Hide starter prompts once user engages
+                starterPromptsEl.style.display = 'none';
+                sendMessage();
+            });
+        }
+
         // New chat: start a fresh session
         newChatBtn.addEventListener('click', () => {
             if (!currentUserId) return;
             currentSessionId = '';
-            getOrCreateSessionId(currentUserId);
+            createNewSessionId(currentUserId);
             chatHistory.innerHTML = `
                 <div class="message-row ai">
                     <div class="bubble">
@@ -748,6 +1102,9 @@
             `;
             saveChatHistory();
             loadSessionList();
+            if (starterPromptsEl) {
+                starterPromptsEl.style.display = 'flex';
+            }
         });
 
         // Handle Enter key in textarea
@@ -771,6 +1128,24 @@
             const text = messageInput.value.trim();
             if (!text) return;
 
+            const activeSessionId = currentSessionId;
+            if (!activeSessionId) {
+                appendMessage('ai', 'Error: No active session. Please start a new conversation.');
+                return;
+            }
+            if (sendingForSessionId === activeSessionId) {
+                // Inform the user in a formal, empathetic way for this specific conversation
+                showInlineSendingToast();
+                return; // ignore if a message is already in flight for this session
+            }
+            // Mark this session as having an in-flight request (other sessions are unaffected)
+            sendingForSessionId = activeSessionId;
+
+            // Hide starter prompts on first real message
+            if (starterPromptsEl && starterPromptsEl.style.display !== 'none') {
+                starterPromptsEl.style.display = 'none';
+            }
+
             // 1. Add User Message
             appendMessage('user', text);
             // If this is the first message in a new session, persist session meta
@@ -780,10 +1155,13 @@
             messageInput.value = '';
             messageInput.style.height = '48px'; // Reset height
             
-            // 2. Add Loading Indicator
+            // 2. Store the session_id at request time for response isolation
+            const requestSessionId = activeSessionId;
+            
+            // 3. Add Loading Indicator
             const loadingId = appendLoading();
             
-            // 3. Prepare API Call
+            // 4. Prepare API Call
             try {
                 // NOTE: This fetch call will fail in the preview environment
                 // because the /sales-agent endpoint does not exist here.
@@ -792,7 +1170,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        session_id: currentSessionId,
+                        session_id: requestSessionId,
                         user_id: currentUserId,
                         message: text
                     })
@@ -801,8 +1179,11 @@
                 if (!response.ok) {
                     if (response.status === 404) {
                         removeLoading(loadingId);
-                        appendMessage('ai', "User not found in database. Please create this user in the Admin Console (Users) and try again.");
-                        saveChatHistory();
+                        // Only show error if still in the same session
+                        if (currentSessionId === requestSessionId) {
+                            appendMessage('ai', "User not found in database. Please create this user in the Admin Console (Users) and try again.");
+                            saveChatHistory();
+                        }
                         return;
                     }
                     throw new Error(`Server returned ${response.status}`);
@@ -810,24 +1191,55 @@
 
                 const data = await response.json();
                 
-                // 4. Remove loading and render AI response
+                // 5. CRITICAL: Only display/record response if session_id matches (response isolation)
+                if (data.session_id !== requestSessionId) {
+                    // Response belongs to a different session - silently ignore it
+                    removeLoading(loadingId);
+                    console.log(`Ignoring response for session ${data.session_id} - expected ${requestSessionId}`);
+                    return;
+                }
+                
+                // 6. Remove loading and render AI response.
+                // If the originating session is still active, render directly into the live chat.
+                // Otherwise, render into an off-screen container and persist to localStorage so it
+                // appears when the user returns to that conversation.
                 removeLoading(loadingId);
-                appendAIMessage(data);
-                saveChatHistory(); // Save after AI response
+
+                if (currentSessionId === requestSessionId) {
+                    // Active session: render and save as usual
+                    appendAIMessage(data);
+                    saveChatHistory(); // Save after AI response
+                } else {
+                    // Background session: render into a temporary container and append to stored HTML
+                    const temp = document.createElement('div');
+                    appendAIMessageInto(temp, data);
+                    const key = getSessionStorageKey(currentUserId, requestSessionId);
+                    const existing = localStorage.getItem(key) || '';
+                    localStorage.setItem(key, existing + temp.innerHTML);
+                    console.log(`Response stored for inactive session ${requestSessionId}`);
+                }
 
             } catch (error) {
                 removeLoading(loadingId);
-                appendMessage('ai', `Error: ${error.message}`);
-                saveChatHistory(); // Save error message
+                // Only show error if still in the same session
+                if (currentSessionId === requestSessionId) {
+                    appendMessage('ai', `Error: ${error.message}`);
+                    saveChatHistory(); // Save error message
+                }
+            } finally {
+                // Clear the in-flight flag only if it still refers to this session
+                if (sendingForSessionId === requestSessionId) {
+                    sendingForSessionId = null;
+                }
             }
         }
 
         // --- DOM Helpers ---
-
+        
         function scrollToBottom() {
             chatHistory.scrollTop = chatHistory.scrollHeight;
         }
-
+        
         function appendMessage(role, text) {
             const row = document.createElement('div');
             row.className = `message-row ${role}`;
@@ -872,7 +1284,7 @@
 
         // --- Complex AI Message Rendering ---
         
-        function appendAIMessage(data) {
+        function appendAIMessageInto(container, data) {
             const row = document.createElement('div');
             row.className = 'message-row ai';
             
@@ -941,22 +1353,30 @@
             flowContainer.appendChild(timeline);
             details.appendChild(flowContainer);
 
-            // B. Raw JSON Trace
-            const tracePre = document.createElement('pre');
-            tracePre.className = 'trace-box';
-            
-            // Simplify trace for display
-            const simplifiedTrace = {
-                intent: data.execution_trace.plan?.intent || "N/A",
-                validation: data.execution_trace.validation_passed ? "PASS" : "FAIL",
-                governance: data.execution_trace.governance_used ? "ACTIVE" : "INACTIVE",
-                steps: data.execution_trace.execution_steps.map(s => ({
-                    tool: s.step,
-                    status: s.success ? "success" : "error"
-                }))
-            };
-            tracePre.textContent = JSON.stringify(simplifiedTrace, null, 2);
-            details.appendChild(tracePre);
+            // B. Human-readable step summary (no raw JSON, no explicit loyalty tier)
+            const summaryBox = document.createElement('div');
+            summaryBox.style.marginTop = '10px';
+            summaryBox.style.fontSize = '12px';
+            summaryBox.style.color = '#4b5563';
+            const intent = data.execution_trace.plan?.intent || 'N/A';
+            const steps = data.execution_trace.execution_steps || [];
+
+            let html = `<div style="margin-bottom:4px;"><strong>Intent:</strong> ${intent}</div>`;
+
+            if (steps.length > 0) {
+                html += '<div><strong>Steps:</strong></div><ol style="margin:4px 0 0 16px; padding:0;">';
+                steps.forEach((s, idx) => {
+                    const label = s.step || `step_${idx + 1}`;
+                    const status = s.success ? '✅' : '⚠️';
+                    html += `<li style="margin-bottom:2px;">${status} ${label}</li>`;
+                });
+                html += '</ol>';
+            } else {
+                html += '<div><strong>Steps:</strong> (no tools executed)</div>';
+            }
+
+            summaryBox.innerHTML = html;
+            details.appendChild(summaryBox);
 
             // Governance Reason text (if any)
             if (data.execution_trace.governance_used && data.execution_trace.governance_fixes && data.execution_trace.governance_fixes[0]) {
@@ -974,48 +1394,115 @@
 
             bubble.appendChild(details);
             row.appendChild(bubble);
-            chatHistory.appendChild(row);
-            scrollToBottom();
+            container.appendChild(row);
+
+            // Only auto-scroll when writing into the live chat container
+            if (container === chatHistory) {
+                scrollToBottom();
+            }
+        }
+
+        function appendAIMessage(data) {
+            appendAIMessageInto(chatHistory, data);
         }
 
         // --- Logic Helper: Render Execution Flow to a specific DOM element ---
+        // We intentionally keep this compact as 3 conceptual nodes:
+        // Sales Agent  →  Agent  →  Tool
+        // Hover text shows the specific agents/tools involved (planner, validator, inventory agent, DB, etc.).
         function renderFlowToContainer(trace, container) {
             const steps = [];
-            
-            // Planner
-            steps.push({ icon: '🧠', label: 'Plan', class: 'planner' });
-            
-            // Validator
-            steps.push({ 
-                icon: '✅', label: 'Valid', 
-                class: trace.validation_passed ? 'validator' : 'error-state' 
-            });
-            
-            // Governance
-            if (trace.governance_used) {
-                steps.push({ icon: '🛡️', label: 'Gov', class: 'governance' });
-            }
-            
-            // Tools
-            if (trace.execution_steps && trace.execution_steps.length > 0) {
-                trace.execution_steps.forEach((step, idx) => {
-                    // Simplified tool names for UI
-                    let toolName = step.step.replace(/_/g, ' ');
-                    if(toolName.length > 15) toolName = 'Tool';
-                    
-                    steps.push({
-                        icon: step.success ? '⚡' : '❌',
-                        label: toolName, 
-                        class: step.success ? 'tool' : 'error-state'
-                    });
-                });
-            }
+            const execSteps = trace.execution_steps || [];
 
-            // Render
+            // Derive which conceptual agents were involved for this turn
+            const usedInventory = execSteps.some(s => s.step === 'check_inventory');
+            const usedRecommend = execSteps.some(s => s.step === 'recommend_products');
+            const usedProfile   = execSteps.some(s => s.step === 'get_user_profile');
+            const usedMemory    = execSteps.some(s => s.step === 'get_session_context');
+            const usedLoyalty   = execSteps.some(s => s.step === 'apply_loyalty');
+            const usedPayment   = execSteps.some(s => s.step === 'calculate_payment');
+            const usedFulfill   = execSteps.some(s => s.step === 'suggest_fulfillment');
+
+            const agentNames = [];
+            // Core abstract agents always in play
+            agentNames.push('Planner agent');
+            agentNames.push(trace.validation_passed ? 'Validator agent (valid)' : 'Validator agent (invalid)');
+            if (trace.governance_used) {
+                agentNames.push('Governance agent');
+            }
+            if (usedProfile)  agentNames.push('Profile agent');
+            if (usedMemory)   agentNames.push('Memory agent');
+            if (usedInventory) agentNames.push('Inventory agent');
+            if (usedRecommend) agentNames.push('Recommendation agent');
+            if (usedLoyalty)  agentNames.push('Loyalty agent');
+            if (usedPayment)  agentNames.push('Payment agent');
+            if (usedFulfill)  agentNames.push('Fulfillment agent');
+
+            // Build tool list, including DB + concrete tools
+            const toolSet = new Set();
+            execSteps.forEach(s => {
+                if (s.step) toolSet.add(s.step);
+            });
+
+            // If any DB-backed tools were used, surface DB explicitly
+            const dbBacked = ['check_inventory','recommend_products','apply_loyalty','calculate_payment','suggest_fulfillment','get_user_profile'];
+            const usedDbBacked = dbBacked.filter(name => toolSet.has(name));
+            const toolNames = [];
+            if (usedDbBacked.length > 0) {
+                toolNames.push('DB (underlying reads/writes)');
+            }
+            if (usedInventory) {
+                // Ensure inventory agent is explicitly mentioned when inventory is accessed
+                toolNames.push('Inventory tool (check_inventory)');
+            }
+            toolSet.forEach(name => {
+                if (!dbBacked.includes(name)) {
+                    toolNames.push(name);
+                }
+            });
+
+            // 1) Sales Agent node
+            steps.push({
+                icon: '🛍️',
+                label: 'Sales Agent',
+                class: 'agent',
+                title: 'Sales Agent: orchestrates planning, agents, and tools for your request.'
+            });
+
+            // 2) Aggregated Agent node
+            const agentsTitle = agentNames.length
+                ? 'Agents involved:\n- ' + agentNames.join('\n- ')
+                : 'Agents involved: Sales Agent only';
+            steps.push({
+                icon: '🤖',
+                label: 'Agent',
+                class: 'agent',
+                title: agentsTitle
+            });
+
+            // 3) Aggregated Tool node
+            const validText = trace.validation_passed ? 'Valid' : 'Invalid';
+            let toolsTitle;
+            if (toolNames.length === 0) {
+                toolsTitle = `Tools used: none\nValidation: ${validText}`;
+            } else {
+                toolsTitle = 'Tools used:\n- ' + toolNames.join('\n- ') + `\nValidation: ${validText}`;
+            }
+            steps.push({
+                icon: toolNames.length ? '🛠️' : 'ℹ️',
+                label: 'Tool',
+                class: trace.validation_passed ? 'tool' : 'error-state',
+                title: toolsTitle
+            });
+
+            // Render the compact 3-node flow
             steps.forEach((step, idx) => {
                 const stepEl = document.createElement('div');
                 stepEl.className = `flow-step ${step.class}`;
                 stepEl.innerHTML = `<span style="margin-right:4px">${step.icon}</span> ${step.label}`;
+                if (step.title) {
+                    stepEl.title = step.title;
+                }
                 container.appendChild(stepEl);
                 
                 if (idx < steps.length - 1) {

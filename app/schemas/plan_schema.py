@@ -38,6 +38,7 @@ class SalesAgentResponse(BaseModel):
     """Response model for /sales-agent endpoint."""
     response: str = Field(..., description="Natural language response to user")
     execution_trace: ExecutionTrace = Field(..., description="Full execution trace")
+    session_id: str = Field(..., description="Session identifier - must match request session_id for response isolation")
 
 
 class AdminUserRequest(BaseModel):

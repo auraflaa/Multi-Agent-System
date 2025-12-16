@@ -39,10 +39,53 @@ class ResponseGenerator:
             return True
         return False
 
+    def _is_capability_query(self, user_message: str) -> bool:
+        """Detect questions asking what the assistant/system can do."""
+        text = user_message.lower()
+        keywords = [
+            "what can you do",
+            "your capabilities",
+            "your capability",
+            "explain your capability",
+            "how can you help",
+            "what are you able to do",
+            "what do you do",
+        ]
+        return any(k in text for k in keywords)
+
     def _has_explicit_ids(self, user_message: str) -> bool:
         """Detect if the user explicitly mentioned product/sku IDs."""
         pattern = r"\b(?:prod-\w+|sku-\w+)\b"
         return re.search(pattern, user_message, flags=re.IGNORECASE) is not None
+
+    def _needs_inventory_clarification(self, user_message: str, intent: str) -> bool:
+        """
+        Detect requests where the user clearly wants an inventory check but
+        hasn't provided enough detail (e.g., size/product) yet.
+
+        In these cases, instead of saying the request is unsupported, we should
+        politely ask follow-up questions to collect size and related details.
+        """
+        text = user_message.lower()
+        # Must look like an inventory / availability question
+        wants_stock = any(
+            k in text
+            for k in [
+                "in stock",
+                "stock",
+                "available",
+                "availability",
+                "check if",
+                "is there any",
+            ]
+        )
+        mentions_size = "size" in text
+        # No explicit product/SKU IDs given
+        has_ids = self._has_explicit_ids(user_message)
+
+        # Trigger only when planner thought it was unsupported,
+        # but the pattern clearly matches an inventory-style request.
+        return intent == "unsupported_request" and wants_stock and mentions_size and not has_ids
 
     def _generate_small_talk(self, user_message: str, context: Dict[str, Any]) -> str:
         """Use LLM to handle greetings / chit-chat."""
@@ -112,12 +155,26 @@ class ResponseGenerator:
         if self._is_small_talk(user_message):
             return self._generate_small_talk(user_message, context)
 
+        # 1b) Capability explanation should always be answered explicitly
+        if self._is_capability_query(user_message):
+            return (
+                "I’m here to help you shop. I can check if items are in stock in your size, suggest products you might like, "
+                "use your profile and membership benefits when they apply, give you a clear idea of what your order will cost, "
+                "and walk you through delivery or pickup options."
+            )
+
+        # 1c) Inventory-style question missing details: ask for size / product instead
+        if self._needs_inventory_clarification(user_message, intent):
+            return (
+                "I can definitely help with that. Could you tell me which product you’re looking at, and the size and gender you want me to check?"
+            )
+
         # 2) Unanswerable / unsupported requests: explain capabilities (abstract)
         if intent == "unsupported_request":
             return (
-                "I might not be able to do exactly that yet, but I can help you with things "
-                "like checking whether items are in stock, suggesting products, looking up your "
-                "loyalty benefits, estimating order totals, and exploring delivery or pickup options."
+                "I’m not able to fulfill that exact request with the current tools, but I can assist with core retail use cases such as "
+                "checking product availability, providing tailored product suggestions, reviewing your existing benefits, "
+                "estimating order totals, and outlining delivery or pickup options."
             )
 
         # 3) Build compact tool results summary
@@ -154,6 +211,8 @@ class ResponseGenerator:
             "- You may mention product IDs or SKUs only if the user explicitly mentioned them first.\n"
             "- If inventory says a product is out of stock, clearly say so and, if recommendations are available, suggest a couple of alternatives.\n"
             "- If payment info is present, summarize totals and discounts clearly in plain language.\n"
+            "- Do NOT state the user's loyalty tier by name (e.g., bronze/silver/gold/platinum). "
+            "You may refer generically to 'your loyalty benefits' or 'your membership'.\n"
             "- Keep responses concise but human (2-4 sentences).\n"
             "- If the user directly referenced a product ID or SKU, add a short follow-up like "
             "\"By the way, how did you get that ID?\" to understand their journey, but keep it to one sentence.\n"

@@ -7,6 +7,7 @@ TOOL_PARAM_REQUIREMENTS: Dict[str, Set[str]] = {
     "get_session_context": {"user_id", "session_id"},
     "save_session_context": {"user_id", "session_id", "context"},
     "get_user_profile": {"user_id"},
+    "update_user_name": {"user_id", "name"},
     # Size is optional; planner may only know SKU. Tool will handle both cases.
     "check_inventory": {"sku"},
     "recommend_products": {"category"},  # price_range is optional
