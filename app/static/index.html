@@ -425,6 +425,38 @@
             width: 100%;
             max-width: 90%;
         }
+        
+        /* Formatting styles for markdown content */
+        .bubble strong {
+            font-weight: 600;
+            color: inherit;
+        }
+        .bubble em {
+            font-style: italic;
+            color: inherit;
+        }
+        .bubble code {
+            background: #f3f4f6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #6366f1;
+        }
+        .bubble ul, .bubble ol {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+        .bubble li {
+            margin-bottom: 4px;
+        }
+        .bubble a {
+            color: #6366f1;
+            text-decoration: underline;
+        }
+        .bubble a:hover {
+            text-decoration: none;
+        }
 
         /* Technical Details (Accordion in AI Bubble) */
         .tech-details {
@@ -599,21 +631,45 @@
         .badge.error { background: #fee2e2; color: #b91c1c; }
         .badge.governance { background: #fef3c7; color: #b45309; }
 
-        /* Loading Animation */
+        /* Loading Animation - Enhanced thinking state */
         .typing-indicator {
             display: inline-flex;
             align-items: center;
-            gap: 4px;
-            padding: 4px 8px;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #f3f4f6;
+            border-radius: 12px;
         }
         .typing-dot {
-            width: 6px; height: 6px; background: #9ca3af; border-radius: 50%;
-            animation: bounce 1.4s infinite ease-in-out both;
+            width: 8px; 
+            height: 8px; 
+            background: #6366f1; 
+            border-radius: 50%;
+            animation: typingPulse 1.4s infinite ease-in-out both;
+            box-shadow: 0 0 4px rgba(99, 102, 241, 0.4);
         }
         .typing-dot:nth-child(1) { animation-delay: -0.32s; }
         .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        .typing-dot:nth-child(3) { animation-delay: 0s; }
         
-        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+        .typing-phase {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #4b5563;
+        }
+        
+        @keyframes typingPulse { 
+            0%, 60%, 100% { 
+                transform: translateY(0) scale(0.8);
+                opacity: 0.5;
+            } 
+            30% { 
+                transform: translateY(-8px) scale(1);
+                opacity: 1;
+            } 
+        }
 
         /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -736,6 +792,10 @@
         let currentSessionId = '';
         // Track in-flight request per session to allow concurrency across different chats
         let sendingForSessionId = null;
+        // Track active loading indicators per session (sessionId -> loadingId)
+        const activeLoadingIndicators = new Map();
+        // Track animated phase timers per loading indicator (loadingId -> timerId)
+        const loadingPhaseTimers = new Map();
 
         const loginOverlay = document.getElementById('loginOverlay');
         const appContainer = document.getElementById('appContainer');
@@ -906,6 +966,14 @@
             if(savedHistory) {
                 chatHistory.innerHTML = savedHistory;
                 scrollToBottom();
+            }
+            // Restore loading indicator if there's an active request for this session
+            if (activeLoadingIndicators.has(currentSessionId)) {
+                const loadingId = activeLoadingIndicators.get(currentSessionId);
+                // Check if loading indicator already exists in the restored HTML
+                if (!document.getElementById(loadingId)) {
+                    appendLoadingWithId(loadingId);
+                }
             }
         }
 
@@ -1158,7 +1226,7 @@
             // 2. Store the session_id at request time for response isolation
             const requestSessionId = activeSessionId;
             
-            // 3. Add Loading Indicator
+            // 3. Add Loading Indicator (tracked per session)
             const loadingId = appendLoading();
             
             // 4. Prepare API Call
@@ -1178,7 +1246,7 @@
 
                 if (!response.ok) {
                     if (response.status === 404) {
-                        removeLoading(loadingId);
+                        removeLoading(loadingId, requestSessionId);
                         // Only show error if still in the same session
                         if (currentSessionId === requestSessionId) {
                             appendMessage('ai', "User not found in database. Please create this user in the Admin Console (Users) and try again.");
@@ -1194,7 +1262,7 @@
                 // 5. CRITICAL: Only display/record response if session_id matches (response isolation)
                 if (data.session_id !== requestSessionId) {
                     // Response belongs to a different session - silently ignore it
-                    removeLoading(loadingId);
+                    removeLoading(loadingId, requestSessionId);
                     console.log(`Ignoring response for session ${data.session_id} - expected ${requestSessionId}`);
                     return;
                 }
@@ -1203,7 +1271,7 @@
                 // If the originating session is still active, render directly into the live chat.
                 // Otherwise, render into an off-screen container and persist to localStorage so it
                 // appears when the user returns to that conversation.
-                removeLoading(loadingId);
+                removeLoading(loadingId, requestSessionId);
 
                 if (currentSessionId === requestSessionId) {
                     // Active session: render and save as usual
@@ -1220,7 +1288,7 @@
                 }
 
             } catch (error) {
-                removeLoading(loadingId);
+                removeLoading(loadingId, requestSessionId);
                 // Only show error if still in the same session
                 if (currentSessionId === requestSessionId) {
                     appendMessage('ai', `Error: ${error.message}`);
@@ -1240,14 +1308,99 @@
             chatHistory.scrollTop = chatHistory.scrollHeight;
         }
         
+        // Format markdown-like text to HTML (safe, basic formatting)
+        function formatText(text) {
+            if (!text) return '';
+            
+            // Split by lines to process lists properly
+            const lines = text.split('\n');
+            const processedLines = [];
+            let inList = false;
+            let listItems = [];
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const trimmed = line.trim();
+                
+                // Check if this is a list item
+                const listMatch = trimmed.match(/^[\-\*]\s+(.+)$/) || trimmed.match(/^\d+\.\s+(.+)$/);
+                
+                if (listMatch) {
+                    if (!inList) {
+                        inList = true;
+                        listItems = [];
+                    }
+                    // Escape HTML in list item content
+                    let itemText = listMatch[1]
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;');
+                    // Apply formatting to list item
+                    itemText = applyInlineFormatting(itemText);
+                    listItems.push(`<li style="margin-left:20px;margin-bottom:4px;">${itemText}</li>`);
+                } else {
+                    // Close list if we were in one
+                    if (inList) {
+                        processedLines.push(`<ul style="margin:8px 0;padding-left:20px;">${listItems.join('')}</ul>`);
+                        listItems = [];
+                        inList = false;
+                    }
+                    
+                    // Process regular line
+                    if (trimmed) {
+                        // Escape HTML first
+                        let escaped = trimmed
+                            .replace(/&/g, '&amp;')
+                            .replace(/</g, '&lt;')
+                            .replace(/>/g, '&gt;');
+                        // Apply inline formatting
+                        escaped = applyInlineFormatting(escaped);
+                        processedLines.push(escaped);
+                    } else {
+                        processedLines.push(''); // Empty line
+                    }
+                }
+            }
+            
+            // Close any remaining list
+            if (inList) {
+                processedLines.push(`<ul style="margin:8px 0;padding-left:20px;">${listItems.join('')}</ul>`);
+            }
+            
+            // Join lines with <br> and return
+            return processedLines.join('<br>');
+        }
+        
+        // Apply inline markdown formatting (bold, italic, code, links)
+        function applyInlineFormatting(text) {
+            // Process in order: code first (to avoid conflicts), then bold, then italic, then links
+            
+            // Inline code: `code` (process first to avoid conflicts)
+            text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+            
+            // Bold: **text** or __text__
+            text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            text = text.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+            
+            // Italic: *text* or _text_ (only if not already bold)
+            // Use a simpler approach: match single asterisks/underscores that aren't adjacent to another
+            text = text.replace(/(^|[^*])\*([^*]+?)\*([^*]|$)/g, '$1<em>$2</em>$3');
+            text = text.replace(/(^|[^_])_([^_]+?)_([^_]|$)/g, '$1<em>$2</em>$3');
+            
+            // Links: [text](url)
+            text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+            
+            return text;
+        }
+
         function appendMessage(role, text) {
             const row = document.createElement('div');
             row.className = `message-row ${role}`;
             
             const bubble = document.createElement('div');
             bubble.className = 'bubble';
-            // Allow basic line breaks
-            bubble.innerHTML = text.replace(/\n/g, '<br>');
+            // Format markdown-style text
+            bubble.innerHTML = formatText(text);
             
             row.appendChild(bubble);
             chatHistory.appendChild(row);
@@ -1257,6 +1410,15 @@
 
         function appendLoading() {
             const id = 'loading-' + Date.now();
+            appendLoadingWithId(id);
+            // Track this loading indicator for the current session
+            if (currentSessionId) {
+                activeLoadingIndicators.set(currentSessionId, id);
+            }
+            return id;
+        }
+
+        function appendLoadingWithId(id) {
             const row = document.createElement('div');
             row.className = 'message-row ai';
             row.id = id;
@@ -1268,18 +1430,44 @@
                     <div class="typing-dot"></div>
                     <div class="typing-dot"></div>
                     <div class="typing-dot"></div>
+                    <span class="typing-phase">Thinking…</span>
                 </div>
             `;
             
             row.appendChild(bubble);
             chatHistory.appendChild(row);
             scrollToBottom();
-            return id;
+
+            // Animate the phase text: Thinking → Acting → Preparing response
+            const phases = ['Thinking…', 'Acting…', 'Preparing response…'];
+            let phaseIndex = 0;
+            const phaseSpan = row.querySelector('.typing-phase');
+            if (phaseSpan) {
+                const timerId = setInterval(() => {
+                    phaseIndex = (phaseIndex + 1) % phases.length;
+                    phaseSpan.textContent = phases[phaseIndex];
+                }, 1400);
+                loadingPhaseTimers.set(id, timerId);
+            }
         }
 
-        function removeLoading(id) {
+        function removeLoading(id, sessionId = null) {
             const el = document.getElementById(id);
             if(el) el.remove();
+
+            // Stop any phase animation timer for this loading indicator
+            if (loadingPhaseTimers.has(id)) {
+                const timerId = loadingPhaseTimers.get(id);
+                clearInterval(timerId);
+                loadingPhaseTimers.delete(id);
+            }
+
+            // Clear from tracking map if sessionId provided
+            if (sessionId && activeLoadingIndicators.has(sessionId)) {
+                activeLoadingIndicators.delete(sessionId);
+            } else if (!sessionId && currentSessionId && activeLoadingIndicators.has(currentSessionId)) {
+                activeLoadingIndicators.delete(currentSessionId);
+            }
         }
 
         // --- Complex AI Message Rendering ---
@@ -1291,9 +1479,9 @@
             const bubble = document.createElement('div');
             bubble.className = 'bubble';
             
-            // 1. Main Response Text
+            // 1. Main Response Text (with markdown formatting)
             const textDiv = document.createElement('div');
-            textDiv.innerHTML = data.response.replace(/\n/g, '<br>');
+            textDiv.innerHTML = formatText(data.response);
             bubble.appendChild(textDiv);
             
             // 2. Status Badges

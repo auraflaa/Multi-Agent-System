@@ -35,7 +35,7 @@ tags_metadata = [
     },
     {
         "name": "Sales Agent",
-        "description": "Core sales agent endpoint orchestrating planner → validator → executor.",
+        "description": "**POST /sales-agent** - Core sales agent endpoint orchestrating planner → validator → executor.",
     },
     {
         "name": "Health",
@@ -181,14 +181,70 @@ async def api_info():
     "/sales-agent",
     response_model=SalesAgentResponse,
     tags=["Sales Agent"],
-    summary="Sales agent orchestration endpoint",
-    description="Takes a user message plus user/session IDs, runs planner → validator → tools, and returns a conversational response with an execution trace.",
+    summary="POST /sales-agent - Main Orchestration Endpoint",
+    description="""<h3>Endpoint URL</h3>
+    <p><code>POST http://127.0.0.1:8000/sales-agent</code> (or your server URL)</p>
+    
+    <h3>Core sales agent endpoint</h3>
+    <p>Orchestrates the multi-agent system.</p>
+    
+    <h3>Flow</h3>
+    <ol>
+        <li><strong>Planner</strong> - Generates JSON action plan from user message</li>
+        <li><strong>Validator</strong> - Validates plan structure and parameters</li>
+        <li><strong>Executor</strong> - Executes tools sequentially (inventory, recommendations, loyalty, payment, etc.)</li>
+        <li><strong>Responder</strong> - Generates natural language response</li>
+    </ol>
+    
+    <h3>Features</h3>
+    <ul>
+        <li>Session-based conversation management</li>
+        <li>User personalization integration</li>
+        <li>Gender-specific product filtering</li>
+        <li>Execution trace for explainability</li>
+    </ul>
+    
+    <h3>cURL Example</h3>
+    <pre><code>curl -X POST 'http://127.0.0.1:8000/sales-agent' \\
+  -H 'accept: application/json' \\
+  -H 'Content-Type: application/json' \\
+  -d '{
+    "session_id": "session_1",
+    "user_id": "001",
+    "message": "Find me fashion products"
+  }'</code></pre>
+    
+    <h3>Example Request</h3>
+    <pre><code>{
+    "session_id": "session_1",
+    "user_id": "001",
+    "message": "Find me men's fashion products"
+}</code></pre>
+    
+    <h3>Example Response</h3>
+    <pre><code>{
+    "response": "Here are some fashion products I found for you...",
+    "execution_trace": {
+        "validation_passed": true,
+        "execution_steps": [...]
+    },
+    "session_id": "session_1"
+}</code></pre>
+    """,
+    response_description="Returns conversational response with full execution trace",
+    operation_id="sales_agent_post",
 )
 async def sales_agent(request: SalesAgentRequest) -> SalesAgentResponse:
     """
     Main sales agent endpoint that orchestrates the agent flow.
     
-    Flow: Planner → Validator → Executor
+    Takes a user message and processes it through:
+    - Planner (LLM-based plan generation)
+    - Validator (plan validation)
+    - Executor (tool execution)
+    - Responder (natural language response)
+    
+    Returns both the conversational response and execution trace for transparency.
     """
     execution_trace = ExecutionTrace(
         validation_passed=False,
@@ -208,6 +264,20 @@ async def sales_agent(request: SalesAgentRequest) -> SalesAgentResponse:
 
         # Get session context (user-centric, branched by session)
         session_context = session.get_session_context(request.user_id, request.session_id)
+
+        # Load long-lived personalization side-car and surface in context
+        try:
+            personalization = session.get_personalization(request.user_id)
+            if personalization:
+                # Attach full personalization blob for the planner
+                session_context.setdefault("personalization", personalization)
+                # Optionally surface common fields at top level for easier prompting
+                if "gender" in personalization and "gender" not in session_context:
+                    session_context["gender"] = personalization["gender"]
+                if "preferred_size" in personalization and "preferred_size" not in session_context:
+                    session_context["preferred_size"] = personalization["preferred_size"]
+        except Exception as e:
+            print(f"Warning: could not enrich session context with personalization for {request.user_id}: {e}")
 
         # Enrich session context with stable user profile for better planning
         try:

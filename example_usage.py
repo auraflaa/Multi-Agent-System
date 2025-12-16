@@ -97,7 +97,7 @@ def test_sales_agent():
     request = {
         "session_id": "session_001",
         "user_id": "user_001",
-        "message": "Recommend some electronics products under $150"
+        "message": "Recommend some electronics products under ₹5000"
     }
     response = requests.post(f"{BASE_URL}/sales-agent", json=request)
     result = response.json()

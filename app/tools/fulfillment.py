@@ -19,7 +19,7 @@ def get_fulfillment_options(location: str) -> List[Dict[str, Any]]:
     options.append({
         "type": "standard_delivery",
         "description": "Standard delivery (5-7 business days)",
-        "cost": 5.99,
+        "cost": 50.0,  # ₹50 INR
         "estimated_days": 5
     })
     
@@ -27,17 +27,17 @@ def get_fulfillment_options(location: str) -> List[Dict[str, Any]]:
     options.append({
         "type": "express_delivery",
         "description": "Express delivery (2-3 business days)",
-        "cost": 12.99,
+        "cost": 150.0,  # ₹150 INR
         "estimated_days": 2
     })
     
-    # Free delivery for orders over $50
+    # Free delivery for orders over ₹500
     options.append({
         "type": "free_standard_delivery",
-        "description": "Free standard delivery (orders over $50)",
+        "description": "Free standard delivery (orders over ₹500)",
         "cost": 0.0,
         "estimated_days": 5,
-        "min_order": 50.0
+        "min_order": 500.0
     })
     
     # Store pickup (if location is near a store)

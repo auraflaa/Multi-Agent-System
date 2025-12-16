@@ -40,12 +40,12 @@ def apply_offers(cart: List[Dict[str, Any]], loyalty_tier: str) -> Dict[str, Any
             "amount": total_discount
         })
     
-    # Apply bulk discount (10% off for orders over $100)
-    if subtotal > 100:
+    # Apply bulk discount (10% off for orders over ₹1000)
+    if subtotal > 1000:
         bulk_discount = subtotal * 0.10
         discounts.append({
             "type": "bulk",
-            "description": "Bulk order discount (10% off orders over $100)",
+            "description": "Bulk order discount (10% off orders over ₹1000)",
             "percentage": 10.0,
             "amount": bulk_discount
         })

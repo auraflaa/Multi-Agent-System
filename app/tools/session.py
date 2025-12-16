@@ -9,7 +9,7 @@ with branches per session (channel).
 import json
 from pathlib import Path
 from typing import Dict, Any, Optional, List
-from app.config import MEMORY_DIR
+from app.config import MEMORY_DIR, USER_DIR
 
 # Memory bounds to prevent unbounded growth
 MAX_MESSAGE_HISTORY = 10  # Keep last N messages per session
@@ -22,7 +22,17 @@ def _get_user_file(user_id: str) -> Path:
 
 
 def _load_user_memory(user_id: str) -> Dict[str, Any]:
-    """Load full memory for a user (all sessions)."""
+    """
+    Load full memory for a user (sessions only).
+
+    Structure:
+    {
+        "user_id": "001",
+        "sessions": { ... }  # per-session conversational context
+    }
+    
+    Note: Personalization is stored separately in app/memory/User/{user_id}.json
+    """
     user_file = _get_user_file(user_id)
     if not user_file.exists():
         return {"user_id": user_id, "sessions": {}}
@@ -91,6 +101,97 @@ def get_user_memory(user_id: str) -> Dict[str, Any]:
     return _load_user_memory(user_id)
 
 
+def _get_user_personalization_file(user_id: str) -> Path:
+    """Return the path to the user's personalization file (separate from sessions)."""
+    return USER_DIR / f"{user_id}.json"
+
+
+def _load_user_personalization(user_id: str) -> Dict[str, Any]:
+    """Load personalization data from the User directory."""
+    user_file = _get_user_personalization_file(user_id)
+    if not user_file.exists():
+        return {}
+    try:
+        with open(user_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, dict):
+                return data
+            return {}
+    except (json.JSONDecodeError, IOError) as e:
+        print(f"Error reading personalization for user {user_id}: {e}")
+        return {}
+
+
+def _save_user_personalization(user_id: str, personalization: Dict[str, Any]) -> None:
+    """Save personalization data to the User directory."""
+    user_file = _get_user_personalization_file(user_id)
+    try:
+        with open(user_file, "w", encoding="utf-8") as f:
+            json.dump(personalization, f, indent=2, ensure_ascii=False)
+    except IOError as e:
+        print(f"Error saving personalization for user {user_id}: {e}")
+        raise
+
+
+def get_personalization(user_id: str) -> Dict[str, Any]:
+    """
+    Return personalization storage for a user.
+
+    This is stored separately from sessions in app/memory/User/{user_id}.json.
+    Intended for unstructured, longer-lived user information such as:
+    - gender / style preferences
+    - preferred sizes
+    - orders currently being processed
+    - any other stable attributes inferred from interactions
+    """
+    return _load_user_personalization(user_id)
+
+
+def save_personalization(user_id: str, updates: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Merge updates into the user's personalization storage.
+
+    Args:
+        user_id: User identifier
+        updates: Arbitrary key/value pairs to upsert
+
+    Returns:
+        The updated personalization dictionary.
+    """
+    if updates is None:
+        updates = {}
+
+    personalization = _load_user_personalization(user_id)
+    personalization.update(updates)
+    _save_user_personalization(user_id, personalization)
+    return personalization
+
+
+def update_personalization(user_id: str, insights: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Update personalization based on insights learned from conversation.
+    
+    This tool allows the LLM to learn from daily chats and update user preferences,
+    such as gender, preferred sizes, style preferences, orders being processed, etc.
+    
+    Args:
+        user_id: User identifier
+        insights: Dictionary of personalization insights to update. Common keys:
+            - gender: "male" | "female" | "other"
+            - preferred_size: "XS" | "S" | "M" | "L" | "XL" | "XXL"
+            - style_preferences: List[str] (e.g., ["casual", "sporty"])
+            - orders_being_processed: List[Dict] (order tracking)
+            - any other unstructured user attributes
+    
+    Returns:
+        The updated personalization dictionary.
+    """
+    if not insights:
+        return _load_user_personalization(user_id)
+    
+    return save_personalization(user_id, insights)
+
+
 def clear_session(user_id: str, session_id: str) -> Dict[str, Any]:
     """
     Clear a specific session for a user.
@@ -108,19 +209,34 @@ def clear_session(user_id: str, session_id: str) -> Dict[str, Any]:
 
 def clear_user_memory(user_id: str) -> Dict[str, Any]:
     """
-    Delete the entire memory file for a user.
+    Delete the entire memory file for a user (both sessions and personalization).
     
     Intended to be called when a user is deleted from the database
     to keep DB and simple memory fully in sync (DB-first).
     """
+    cleared_sessions = False
+    cleared_personalization = False
+    
+    # Clear sessions file
     user_file = _get_user_file(user_id)
     if user_file.exists():
         try:
             user_file.unlink()
-            return {"status": "cleared"}
+            cleared_sessions = True
         except OSError as e:
-            print(f"Error deleting memory file for user {user_id}: {e}")
-            return {"status": "error", "error": str(e)}
+            print(f"Error deleting sessions file for user {user_id}: {e}")
+    
+    # Clear personalization file
+    personalization_file = _get_user_personalization_file(user_id)
+    if personalization_file.exists():
+        try:
+            personalization_file.unlink()
+            cleared_personalization = True
+        except OSError as e:
+            print(f"Error deleting personalization file for user {user_id}: {e}")
+    
+    if cleared_sessions or cleared_personalization:
+        return {"status": "cleared", "sessions": cleared_sessions, "personalization": cleared_personalization}
     return {"status": "not_found"}
 
 

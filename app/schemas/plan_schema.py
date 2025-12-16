@@ -18,9 +18,21 @@ class AgentPlan(BaseModel):
 
 class SalesAgentRequest(BaseModel):
     """Request model for /sales-agent endpoint."""
-    session_id: str = Field(..., description="Unique session identifier")
-    user_id: str = Field(..., description="User identifier")
-    message: str = Field(..., description="User message/query")
+    session_id: str = Field(
+        ..., 
+        description="Unique session identifier for conversation isolation",
+        example="session_1"
+    )
+    user_id: str = Field(
+        ..., 
+        description="User identifier (must exist in users table)",
+        example="001"
+    )
+    message: str = Field(
+        ..., 
+        description="User message/query to process",
+        example="Find me fashion products"
+    )
 
 
 class ExecutionTrace(BaseModel):
@@ -36,9 +48,20 @@ class ExecutionTrace(BaseModel):
 
 class SalesAgentResponse(BaseModel):
     """Response model for /sales-agent endpoint."""
-    response: str = Field(..., description="Natural language response to user")
-    execution_trace: ExecutionTrace = Field(..., description="Full execution trace")
-    session_id: str = Field(..., description="Session identifier - must match request session_id for response isolation")
+    response: str = Field(
+        ..., 
+        description="Natural language response to user",
+        example="Here are some fashion products I found for you..."
+    )
+    execution_trace: ExecutionTrace = Field(
+        ..., 
+        description="Full execution trace including plan, validation status, and tool execution results"
+    )
+    session_id: str = Field(
+        ..., 
+        description="Session identifier - must match request session_id for response isolation",
+        example="session_1"
+    )
 
 
 class AdminUserRequest(BaseModel):

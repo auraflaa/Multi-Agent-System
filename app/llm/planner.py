@@ -54,7 +54,7 @@ class SalesAgentPlanner:
         user_id: str,
         session_context: Dict[str, Any]
     ) -> str:
-        """Build the user prompt with bounded but richer session context."""
+        """Build the user prompt with bounded but richer session context, including user data and personalization."""
         essential_context: Dict[str, Any] = {}
 
         # Last intent / message (if exists)
@@ -88,13 +88,31 @@ class SalesAgentPlanner:
                 )
             essential_context["recent_history"] = compact_history
 
-        context_str = json.dumps(essential_context) if essential_context else "{}"
+        # Include full user profile data (from database)
+        if "user_profile" in session_context:
+            essential_context["user_profile"] = session_context["user_profile"]
+
+        # Include full personalization data (from User directory)
+        if "personalization" in session_context:
+            personalization = session_context["personalization"]
+            if isinstance(personalization, dict) and personalization:
+                essential_context["personalization"] = personalization
+                # Surface key personalization fields for easier inference
+                if "gender" in personalization:
+                    essential_context["user_gender"] = personalization["gender"]
+                if "preferred_size" in personalization:
+                    essential_context["user_preferred_size"] = personalization["preferred_size"]
+
+        context_str = json.dumps(essential_context, indent=2) if essential_context else "{}"
 
         return f"""User Message: "{user_message}"
 
 User ID: {user_id}
 Session ID: {session_id}
-Session Context (bounded): {context_str}
+Context (session + user data + personalization):
+{context_str}
+
+IMPORTANT: Use personalization data (gender, preferred_size) to infer product categories when the user mentions product types. For example, if user_gender is "male" and user says "shirt", infer category as "Men's Fashion" or similar. Be proactive and take action with recommend_products when you have enough context.
 
 Generate a JSON action plan."""
     

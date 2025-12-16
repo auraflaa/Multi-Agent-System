@@ -40,6 +40,6 @@ def calculate_payment(cart: List[Dict[str, Any]], discounts: Dict[str, Any]) -> 
         "tax_rate": tax_rate * 100,
         "tax": tax,
         "final_amount": final_amount,
-        "currency": "USD"
+        "currency": "INR"
     }
 

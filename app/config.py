@@ -18,6 +18,10 @@ DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 MEMORY_DIR = BASE_DIR / "app" / "memory" / "sessions"
 MEMORY_DIR.mkdir(parents=True, exist_ok=True)
 
+# User personalization directory (separate from sessions)
+USER_DIR = BASE_DIR / "app" / "memory" / "User"
+USER_DIR.mkdir(parents=True, exist_ok=True)
+
 # LLM Configuration
 # Default to a stable Gemini model; can be overridden via LLM_MODEL env var
 LLM_MODEL = os.getenv("LLM_MODEL", "gemini-2.5-flash")
@@ -40,6 +44,7 @@ AVAILABLE_TOOLS = {
     "save_session_context",
     "get_user_profile",
     "update_user_name",
+    "update_personalization",  # Learn from conversations and update user preferences
     "check_inventory",
     "recommend_products",
     "apply_offers",

@@ -23,6 +23,7 @@ class PlanRunner:
         "save_session_context": session.save_session_context,
         "get_user_profile": users.get_user_profile,
         "update_user_name": users.update_user_name,
+        "update_personalization": session.update_personalization,
         "check_inventory": inventory.check_inventory,
         "recommend_products": recommendations.recommend_products,
         "apply_offers": loyalty.apply_offers,
@@ -131,6 +132,16 @@ class PlanRunner:
         resolved_params = self._resolve_params(
             step.params, session_id, user_id, context, previous_steps
         )
+        
+        # Auto-inject gender from personalization for recommend_products if not explicitly provided
+        if step.action == "recommend_products" and "gender" not in resolved_params:
+            personalization = context.get("personalization", {})
+            if isinstance(personalization, dict) and "gender" in personalization:
+                resolved_params["gender"] = personalization["gender"]
+            elif "gender" in context:
+                resolved_params["gender"] = context["gender"]
+            elif "user_gender" in context:
+                resolved_params["gender"] = context["user_gender"]
         
         try:
             # Execute the tool
