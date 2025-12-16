@@ -48,6 +48,15 @@ static_dir = Path(__file__).parent / "static"
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
+
+@app.get("/healthz")
+async def healthz():
+    """
+    Lightweight health check endpoint for Render.
+    Avoids touching DB/LLM so startup is fast and reliable.
+    """
+    return {"status": "ok"}
+
 # Initialize components
 planner = SalesAgentPlanner()
 validator = PlanValidator()
