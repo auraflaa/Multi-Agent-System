@@ -1306,16 +1306,17 @@
                 });
 
                 if (!response.ok) {
-                    if (response.status === 404) {
-                        removeLoading(loadingId, requestSessionId);
-                        // Only show error if still in the same session
-                        if (currentSessionId === requestSessionId) {
+                    removeLoading(loadingId, requestSessionId);
+                    // Only show error if still in the same session
+                    if (currentSessionId === requestSessionId) {
+                        if (response.status === 404) {
                             appendMessage('ai', "User not found in database. Please create this user in the Admin Console (Users) and try again.");
-                            saveChatHistory();
+                        } else {
+                            appendMessage('ai', "Governance: We couldn’t handle your request right now. Please wait a moment and try again.");
                         }
-                        return;
+                        saveChatHistory();
                     }
-                    throw new Error(`Server returned ${response.status}`);
+                    return;
                 }
 
                 const data = await response.json();
@@ -1352,7 +1353,7 @@
                 removeLoading(loadingId, requestSessionId);
                 // Only show error if still in the same session
                 if (currentSessionId === requestSessionId) {
-                    appendMessage('ai', `Error: ${error.message}`);
+                    appendMessage('ai', "Governance: We couldn’t handle your request right now. Please wait a moment and try again.");
                     saveChatHistory(); // Save error message
                 }
             } finally {
