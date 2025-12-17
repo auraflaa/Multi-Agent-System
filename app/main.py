@@ -376,7 +376,10 @@ async def sales_agent(request: SalesAgentRequest) -> SalesAgentResponse:
         
         if not is_valid:
             return SalesAgentResponse(
-                response=f"I encountered an error planning your request: {', '.join(errors)}",
+                response=(
+                    "I hit a planning snag and couldn't finalize the steps just now. "
+                    "Please try again, and I'll re-run the request."
+                ),
                 execution_trace=execution_trace,
                 session_id=request.session_id,
             )

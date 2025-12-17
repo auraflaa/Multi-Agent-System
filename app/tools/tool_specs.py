@@ -9,6 +9,7 @@ TOOL_PARAM_REQUIREMENTS: Dict[str, Set[str]] = {
     "get_user_profile": {"user_id"},
     "update_user_name": {"user_id", "name"},
     "update_personalization": {"user_id", "insights"},  # insights is a dict of personalization data
+    "get_orders": {"user_id"},
     # Size is optional. Can use either sku OR product_id to check inventory.
     "check_inventory": set(),  # At least one of: sku or product_id required
     "recommend_products": {"category"},  # price_range and gender are optional

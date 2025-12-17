@@ -50,6 +50,7 @@ AVAILABLE_TOOLS = {
     "get_user_profile",
     "update_user_name",
     "update_personalization",  # Learn from conversations and update user preferences
+    "get_orders",
     "check_inventory",
     "recommend_products",
     "apply_offers",

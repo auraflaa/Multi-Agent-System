@@ -6,6 +6,7 @@ from app.tools import (
     users,
     inventory,
     recommendations,
+    orders,
     loyalty,
     payment,
     fulfillment,
@@ -24,6 +25,7 @@ class PlanRunner:
         "get_user_profile": users.get_user_profile,
         "update_user_name": users.update_user_name,
         "update_personalization": session.update_personalization,
+        "get_orders": orders.get_orders,
         "check_inventory": inventory.check_inventory,
         "recommend_products": recommendations.recommend_products,
         "apply_offers": loyalty.apply_offers,
@@ -155,22 +157,46 @@ class PlanRunner:
                 resolved_params["gender"] = context["gender"]
             elif "user_gender" in context:
                 resolved_params["gender"] = context["user_gender"]
+            # Filter out unsupported params for recommend_products
+        if step.action == "recommend_products":
+            allowed_params = {"category", "price_range", "gender"}
+            resolved_params = {k: v for k, v in resolved_params.items() if k in allowed_params}
         
         # Auto-inject product_id for check_inventory from previous recommend_products results
         if step.action == "check_inventory":
-            # If neither sku nor product_id is provided, try to extract from previous steps
+            # Allow planner to pass product_name; map it to product_id from prior recommendations
+            product_name = resolved_params.get("product_name")
+
+            # If neither sku nor product_id is provided, try to extract from previous steps/results
             if "sku" not in resolved_params and "product_id" not in resolved_params:
-                # Look for product_id in previous recommend_products results
-                for prev_step in reversed(previous_steps):
-                    if prev_step.get("step") == "recommend_products" and prev_step.get("success"):
-                        products = prev_step.get("result", [])
-                        if isinstance(products, list) and len(products) > 0:
-                            # Use the first product's product_id
-                            first_product = products[0]
-                            if isinstance(first_product, dict) and "product_id" in first_product:
-                                resolved_params["product_id"] = first_product["product_id"]
-                                break
-                # If still no product_id, check all previous steps for any product results
+                # If product_name is present, try to match it to a recommended product_id
+                if product_name:
+                    name_lower = str(product_name).strip().lower()
+                    for prev_step in reversed(previous_steps):
+                        if prev_step.get("step") == "recommend_products" and prev_step.get("success"):
+                            products = prev_step.get("result", [])
+                            if isinstance(products, list):
+                                for item in products:
+                                    if not isinstance(item, dict):
+                                        continue
+                                    if str(item.get("name", "")).strip().lower() == name_lower and "product_id" in item:
+                                        resolved_params["product_id"] = item["product_id"]
+                                        break
+                        if "product_id" in resolved_params:
+                            break
+
+                # Otherwise, use the first recommended product as fallback
+                if "product_id" not in resolved_params:
+                    for prev_step in reversed(previous_steps):
+                        if prev_step.get("step") == "recommend_products" and prev_step.get("success"):
+                            products = prev_step.get("result", [])
+                            if isinstance(products, list) and len(products) > 0:
+                                first_product = products[0]
+                                if isinstance(first_product, dict) and "product_id" in first_product:
+                                    resolved_params["product_id"] = first_product["product_id"]
+                                    break
+
+                # If still no product_id, scan any previous list results for a product_id
                 if "product_id" not in resolved_params:
                     for prev_step in reversed(previous_steps):
                         result = prev_step.get("result")
@@ -181,6 +207,89 @@ class PlanRunner:
                                     break
                             if "product_id" in resolved_params:
                                 break
+
+                # If still no product_id and we have a product_name, try DB lookup by exact/like name
+                if "product_id" not in resolved_params and product_name:
+                    try:
+                        from app.db.database import get_db_connection as _get_db_conn  # local import to avoid cycles
+                        conn = _get_db_conn()
+                        cur = conn.cursor()
+                        cur.execute(
+                            "SELECT product_id FROM products WHERE lower(name) = ? LIMIT 1",
+                            (name_lower,),
+                        )
+                        row = cur.fetchone()
+                        if row and row[0]:
+                            resolved_params["product_id"] = row[0]
+                        else:
+                            cur.execute(
+                                "SELECT product_id FROM products WHERE lower(name) LIKE ? LIMIT 1",
+                                (f"%{name_lower}%",),
+                            )
+                            row = cur.fetchone()
+                            if row and row[0]:
+                                resolved_params["product_id"] = row[0]
+                    except Exception:
+                        pass
+                    finally:
+                        try:
+                            conn.close()
+                        except Exception:
+                            pass
+
+                # Still nothing resolved -> bail early with a clear error
+                if "product_id" not in resolved_params and "sku" not in resolved_params:
+                    return {
+                        "step": step.action,
+                        "success": False,
+                        "error": "check_inventory requires product_id or sku; none could be inferred. Run recommend_products first.",
+                        "params": resolved_params,
+                        "result": None,
+                    }
+
+            # If product_id was supplied but doesn't match any previous recommended product_ids,
+            # try to map a slugified name to an actual product_id from prior recommendations.
+            if "product_id" in resolved_params:
+                provided_pid = str(resolved_params["product_id"]).strip().lower()
+                # Also derive a slug without common prefixes like "prod-"
+                provided_slug = provided_pid
+                for prefix in ("prod-", "prod_"):
+                    if provided_slug.startswith(prefix):
+                        provided_slug = provided_slug[len(prefix):]
+                        break
+                recommended = []
+                for prev_step in reversed(previous_steps):
+                    if prev_step.get("step") == "recommend_products" and prev_step.get("success"):
+                        recs = prev_step.get("result", [])
+                        if isinstance(recs, list):
+                            recommended.extend([r for r in recs if isinstance(r, dict)])
+                ids = {str(r.get("product_id", "")).strip().lower() for r in recommended}
+                if provided_pid not in ids and recommended:
+                    def slugify(name: str) -> str:
+                        import re
+                        return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+                    for r in recommended:
+                        name = str(r.get("name", "")).strip()
+                        pid = r.get("product_id")
+                        if not pid or not name:
+                            continue
+                        name_slug = slugify(name)
+                        # Looser match: exact, or prefix/suffix match to handle trailing prices/noise
+                        if (
+                            name_slug == provided_pid
+                            or name_slug == provided_slug
+                            or provided_slug.startswith(name_slug)
+                            or name_slug.startswith(provided_slug)
+                        ):
+                            resolved_params["product_id"] = pid
+                            break
+                    # If still not matched, fall back to the first recommended product_id
+                    if "product_id" not in resolved_params and recommended:
+                        resolved_params["product_id"] = recommended[0].get("product_id")
+
+            # Filter out unsupported params (e.g., product_name, gender) before calling tool
+            allowed_params = {"sku", "product_id", "size"}
+            resolved_params = {k: v for k, v in resolved_params.items() if k in allowed_params}
         
         try:
             # Execute the tool

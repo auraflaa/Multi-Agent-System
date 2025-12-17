@@ -60,16 +60,25 @@ class PlanValidator:
                 "find", "show", "want", "looking", "clothing", "clothes", "fashion", 
                 "shirt", "dress", "top", "pants", "female", "male", "women", "men",
                 "products", "items", "browse", "all of them", "all of their", "anything",
-                "give me", "need", "help me", "can you", "could you", "shop", "shopping",
+                "give me", "need", "help me", "shop", "shopping",
                 "branded", "designer", "apparel", "wear", "garment", "outfit", "style",
                 "trending", "popular", "recommend", "suggest", "see", "view", "display"
             ]
+            order_keywords = [
+                "my orders", "order status", "order history", "all my orders", "orders",
+                "previous orders", "past orders"
+            ]
             user_lower = user_message.lower()
             has_product_keywords = any(keyword in user_lower for keyword in product_keywords)
+            has_order_keywords = any(keyword in user_lower for keyword in order_keywords)
             
             steps = plan_dict.get("steps", [])
             has_recommend = any(
                 isinstance(step, dict) and step.get("action") == "recommend_products" 
+                for step in steps
+            )
+            has_get_orders = any(
+                isinstance(step, dict) and step.get("action") == "get_orders"
                 for step in steps
             )
             
@@ -93,8 +102,16 @@ class PlanValidator:
                 plan_dict["steps"] = steps
                 plan_dict["needs_tools"] = True
             
+            # STRICT ENFORCEMENT: If user asks for orders, ensure get_orders exists
+            if has_order_keywords:
+                if not has_get_orders:
+                    steps.append({"action": "get_orders", "params": {"user_id": "{{user_id}}"}})
+                    plan_dict["steps"] = steps
+                    errors.append("Order query detected but no get_orders step found - auto-added")
+                plan_dict["needs_tools"] = True
+
             # STRICT ENFORCEMENT: If user asks for products, MUST have recommend_products step
-            if has_product_keywords:
+            if has_product_keywords and not has_order_keywords:
                 # Infer gender and category from user message
                 gender = None
                 if any(g in user_lower for g in ["female", "women", "woman", "ladies", "girl"]):
