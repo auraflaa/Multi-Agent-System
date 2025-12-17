@@ -442,13 +442,13 @@ async def sales_agent(request: SalesAgentRequest) -> SalesAgentResponse:
         )
     
     except HTTPException as http_exc:
-        # Surface a friendly, user-facing message while keeping details in the trace
+        # Surface a formal, user-facing message while keeping details in the trace
         detail = http_exc.detail if isinstance(http_exc.detail, str) else str(http_exc.detail)
         execution_trace.validation_errors.append(f"Request error: {detail}")
         return SalesAgentResponse(
             response=(
-                "I couldn't process that request yet because something about the setup or data "
-                f"needs attention: {detail}"
+                "Governance: We couldn’t handle your request right now. "
+                "Please wait a moment and try again."
             ),
             execution_trace=execution_trace,
             session_id=request.session_id if hasattr(request, 'session_id') else ''  # Echo back session_id
@@ -462,8 +462,8 @@ async def sales_agent(request: SalesAgentRequest) -> SalesAgentResponse:
         execution_trace.validation_errors.append(f"Unexpected error: {str(e)}")
         return SalesAgentResponse(
             response=(
-                "I ran into an internal issue while processing your request. "
-                "Please try again in a moment or check the admin console/logs for more details."
+                "Governance: We couldn’t handle your request right now. "
+                "Please wait a moment and try again."
             ),
             execution_trace=execution_trace,
             session_id=request.session_id if hasattr(request, 'session_id') else ''  # Echo back session_id
