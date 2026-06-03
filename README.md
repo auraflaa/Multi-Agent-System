@@ -1,4 +1,13 @@
+<div align="center">
+
 # Multi-Agent Retail System
+
+
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+
+</div>
+
+---
 
 Enterprise-style agentic AI system for retail domain (EY Techathon use case). This system demonstrates intelligent LLM orchestration, explainability, and robustness through a clean separation of concerns: LLM agents generate plans, deterministic tools execute business logic.
 
